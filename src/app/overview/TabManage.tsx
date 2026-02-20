@@ -7,6 +7,7 @@ import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import SearchBuilder, { SearchCondition } from "@/components/ui/SearchBuilder";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function TabManage() {
     /* ── State ── */
@@ -32,7 +33,7 @@ export default function TabManage() {
 
     // Selection & delete
     const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
-    const [confirmText, setConfirmText] = useState("");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
@@ -145,11 +146,7 @@ export default function TabManage() {
 
     /* ── Delete ── */
     const handleDelete = async () => {
-        if (confirmText !== "XÓA") {
-            setError("Nhập đúng \"XÓA\" để xác nhận xóa.");
-            return;
-        }
-
+        setShowDeleteConfirm(false);
         setDeleteLoading(true);
         setError(null);
 
@@ -167,7 +164,6 @@ export default function TabManage() {
             if (d.error) throw new Error(d.error);
             setDeleteMsg(`✅ Đã xóa ${d.deletedCount} / ${d.total} dòng!`);
             setSelectedRows(new Set());
-            setConfirmText("");
             // Reload data
             await handleLoad();
         } catch (e: unknown) {
@@ -321,6 +317,7 @@ export default function TabManage() {
                             selectable
                             selectedRows={selectedRows}
                             onSelectionChange={setSelectedRows}
+                            stickyHeader
                         />
                     </div>
 
@@ -329,55 +326,45 @@ export default function TabManage() {
                         <div
                             style={{
                                 marginTop: "1rem",
-                                padding: "1rem",
-                                borderRadius: "0.75rem",
-                                border: "1px solid var(--warning-bg)",
-                                background: "var(--bg-card-alt)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.75rem",
                             }}
                         >
-                            <InfoBanner type="warning">
-                                Đã chọn <strong>{selectedRows.size}</strong> dòng.
-                                Nhập &quot;XÓA&quot; để xác nhận xóa khỏi BigQuery.
-                            </InfoBanner>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    gap: "0.75rem",
-                                    alignItems: "flex-end",
-                                    marginTop: "0.75rem",
-                                }}
+                            <button
+                                className="btn btn-danger"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                disabled={deleteLoading}
+                                style={{ height: 40 }}
                             >
-                                <div style={{ flex: 1 }}>
-                                    <label className="form-label">
-                                        Nhập &quot;XÓA&quot; để xác nhận:
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={confirmText}
-                                        onChange={(e) =>
-                                            setConfirmText(e.target.value)
-                                        }
-                                        placeholder="XÓA"
-                                    />
-                                </div>
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={handleDelete}
-                                    disabled={deleteLoading || confirmText !== "XÓA"}
-                                    style={{ height: 40 }}
-                                >
-                                    {deleteLoading ? (
-                                        <>
-                                            <span className="spinner" /> Đang xóa...
-                                        </>
-                                    ) : (
-                                        `🗑️ Xóa ${selectedRows.size} dòng`
-                                    )}
-                                </button>
-                            </div>
+                                {deleteLoading ? (
+                                    <>
+                                        <span className="spinner" /> Đang xóa...
+                                    </>
+                                ) : (
+                                    `🗑️ Xóa ${selectedRows.size} dòng đã chọn`
+                                )}
+                            </button>
                         </div>
                     )}
+
+                    {/* Confirm Delete Dialog */}
+                    <ConfirmDialog
+                        open={showDeleteConfirm}
+                        title="Xác nhận xóa dữ liệu"
+                        message={
+                            <>
+                                Bạn có chắc chắn muốn xóa <strong>{selectedRows.size}</strong> dòng đã chọn khỏi BigQuery?
+                                <br />
+                                <span style={{ color: "var(--tbl-diff-neg)", fontWeight: 600 }}>Hành động này không thể hoàn tác.</span>
+                            </>
+                        }
+                        confirmLabel={`Xóa ${selectedRows.size} dòng`}
+                        cancelLabel="Hủy bỏ"
+                        variant="danger"
+                        onConfirm={handleDelete}
+                        onCancel={() => setShowDeleteConfirm(false)}
+                    />
                 </>
             )}
 

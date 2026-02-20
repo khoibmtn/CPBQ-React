@@ -132,6 +132,15 @@ export default function IcdAnalysisPage() {
         }
     }, [periods, ml2, selectedKhoa, sortPeriodText]);
 
+    // ── Auto-refetch when server-side filters change ──
+    useEffect(() => {
+        // Only auto-refetch if we already have data loaded
+        if (periodsData) {
+            handleCompare();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ml2, selectedKhoa]);
+
     // ── Derived: cost type ──
     const costTypeMap: Record<string, CostType> = {
         "Số lượt": "soluot",
