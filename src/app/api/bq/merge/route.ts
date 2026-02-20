@@ -25,23 +25,7 @@ export async function GET() {
     try {
         await ensureTable();
 
-        // Load merge groups
-        const mergeRows = await runQuery<{
-            target_khoa: string;
-            source_khoa: string;
-        }>(`SELECT target_khoa, source_khoa FROM \`${MERGE_ID}\` ORDER BY target_khoa, source_khoa`);
-
-        const groupMap: Record<string, string[]> = {};
-        for (const row of mergeRows) {
-            if (!groupMap[row.target_khoa]) groupMap[row.target_khoa] = [];
-            groupMap[row.target_khoa].push(row.source_khoa);
-        }
-        const groups = Object.entries(groupMap).map(([target_khoa, sources]) => ({
-            target_khoa,
-            sources,
-        }));
-
-        // Load khoa options for dropdowns
+        // Load khoa options for dropdowns (need this first for display mapping)
         const khoaFullId = getFullTableId(LOOKUP_KHOA_TABLE);
         const khoaRows = await runQuery<{
             makhoa_xml: string;
@@ -71,6 +55,35 @@ export async function GET() {
                 thu_tu: row.thu_tu,
             };
         });
+
+        // Build display lookup: display → short_name, short_name → first display
+        const nameToFirstDisplay: Record<string, string> = {};
+        khoaOptions.forEach((o) => {
+            if (!nameToFirstDisplay[o.short_name]) nameToFirstDisplay[o.short_name] = o.display;
+        });
+
+        // Build reverse: display → true (for checking if value is already a display)
+        const displaySet = new Set(khoaOptions.map((o) => o.display));
+
+        // Load merge groups
+        const mergeRows = await runQuery<{
+            target_khoa: string;
+            source_khoa: string;
+        }>(`SELECT target_khoa, source_khoa FROM \`${MERGE_ID}\` ORDER BY target_khoa, source_khoa`);
+
+        const groupMap: Record<string, string[]> = {};
+        for (const row of mergeRows) {
+            if (!groupMap[row.target_khoa]) groupMap[row.target_khoa] = [];
+            // source_khoa may be a display string (new format) or short_name (old format)
+            const srcDisplay = displaySet.has(row.source_khoa)
+                ? row.source_khoa
+                : nameToFirstDisplay[row.source_khoa] || row.source_khoa;
+            groupMap[row.target_khoa].push(srcDisplay);
+        }
+        const groups = Object.entries(groupMap).map(([target_khoa, sources]) => ({
+            target_khoa,
+            sources,
+        }));
 
         return NextResponse.json({ groups, khoaOptions });
     } catch (e: unknown) {

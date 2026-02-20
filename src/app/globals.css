@@ -1082,6 +1082,7 @@ body {
   left: 0;
   background: var(--tbl-col-fixed-bg);
   border-left: none;
+  border-right: none;
 }
 
 /* Khoa column — overlap TT border to eliminate gap */
@@ -1100,6 +1101,7 @@ body {
   width: 40px;
   max-width: 40px;
   box-sizing: border-box;
+  border-right: none !important;
 }
 
 .ct-khoa-name {

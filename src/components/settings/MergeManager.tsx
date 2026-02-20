@@ -41,27 +41,9 @@ export default function MergeManager() {
             const res = await fetch("/api/bq/merge");
             const data = await res.json();
             if (data.error) throw new Error(data.error);
-
-            const opts: KhoaOption[] = data.khoaOptions || [];
-            setKhoaOptions(opts);
-
-            // Build name→display map from fresh opts
-            const n2d: Record<string, string[]> = {};
-            opts.forEach((o) => {
-                if (!n2d[o.short_name]) n2d[o.short_name] = [];
-                n2d[o.short_name].push(o.display);
-            });
-
-            // Convert API groups (short_names) → display strings
-            const apiGroups: { target_khoa: string; sources: string[] }[] = data.groups || [];
-            const converted = apiGroups.map((g) => ({
-                target_khoa: g.target_khoa,
-                sources: g.sources.map((src: string) => {
-                    const ds = n2d[src] || [];
-                    return ds[0] || src; // first display, or raw name as fallback
-                }),
-            }));
-            setGroups(converted);
+            setKhoaOptions(data.khoaOptions || []);
+            // sources are already display strings from API
+            setGroups(data.groups || []);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
         } finally {
@@ -82,15 +64,9 @@ export default function MergeManager() {
             }
         }
 
-        // Convert display strings → short_names for saving, dedup
-        const saveGroups = groups.map((g) => ({
-            target_khoa: g.target_khoa,
-            sources: [...new Set(g.sources.map((d) => displayToName[d] || d))],
-        }));
-
-        // Check no overlap
+        // Check no duplicate sources across groups
         const allSources: string[] = [];
-        for (const g of saveGroups) {
+        for (const g of groups) {
             for (const s of g.sources) {
                 if (allSources.includes(s)) {
                     setError(`Khoa "${s}" xuất hiện trong nhiều nhóm gộp!`);
@@ -106,7 +82,7 @@ export default function MergeManager() {
             const res = await fetch("/api/bq/merge", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ groups: saveGroups }),
+                body: JSON.stringify({ groups }),
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
