@@ -1018,6 +1018,54 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   ICD ANALYSIS FILTER BAR
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.icd-filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+}
+
+.icd-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.icd-filter-item .form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.icd-filter-narrow {
+  max-width: 80px;
+}
+
+.icd-filter-narrow input {
+  text-align: center;
+}
+
+.icd-info-line {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  padding: 0 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    COMPARISON TABLE
    ═══════════════════════════════════════════════════════════════════════════════ */
 

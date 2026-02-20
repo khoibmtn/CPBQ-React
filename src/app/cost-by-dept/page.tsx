@@ -32,8 +32,8 @@ interface PeriodResult {
 
 export default function CostByDeptPage() {
     /* ── State ── */
-    const [initData, setInitData] = useState<InitData | null>(null);
-    const [initLoading, setInitLoading] = useState(true);
+    const [initData, setInitData] = useSessionState<InitData | null>("cbd_initData", null);
+    const [initLoading, setInitLoading] = useState(!initData); // skip spinner if cached
     const [error, setError] = useState<string | null>(null);
 
     // Persisted state

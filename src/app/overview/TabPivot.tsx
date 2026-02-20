@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSessionState } from "@/hooks/useSessionState";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import InfoBanner from "@/components/ui/InfoBanner";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -26,12 +27,12 @@ type Metric = "so_luot" | "tong_chi";
 /* ── Component ── */
 
 export default function TabPivot() {
-    const [years, setYears] = useState<number[]>([]);
-    const [selectedYear, setSelectedYear] = useState<number | null>(null);
-    const [metric, setMetric] = useState<Metric>("so_luot");
-    const [rawData, setRawData] = useState<PivotRow[]>([]);
+    const [years, setYears] = useSessionState<number[]>("pv_years", []);
+    const [selectedYear, setSelectedYear] = useSessionState<number | null>("pv_selectedYear", null);
+    const [metric, setMetric] = useSessionState<Metric>("pv_metric", "so_luot");
+    const [rawData, setRawData] = useSessionState<PivotRow[]>("pv_rawData", []);
     const [loading, setLoading] = useState(false);
-    const [initialLoading, setInitialLoading] = useState(true);
+    const [initialLoading, setInitialLoading] = useState(years.length === 0);
     const [error, setError] = useState<string | null>(null);
     const [showDetail, setShowDetail] = useState(false);
 
@@ -47,7 +48,7 @@ export default function TabPivot() {
                 }
                 const yrs: number[] = d.years || [];
                 setYears(yrs);
-                if (yrs.length > 0) {
+                if (yrs.length > 0 && !selectedYear) {
                     setSelectedYear(yrs[0]);
                 }
                 setInitialLoading(false);

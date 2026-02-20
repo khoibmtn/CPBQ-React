@@ -85,7 +85,7 @@ function getTotal(data: Record<string, PeriodData>, field: string): number {
 /* ── Main Component ─────────────────────────────────────────────────────── */
 
 export default function HospitalStatsPage() {
-    const [yearMonths, setYearMonths] = useState<YearMonth[]>([]);
+    const [yearMonths, setYearMonths] = useSessionState<YearMonth[]>("hs_yearMonths", []);
     const [periods, setPeriods] = useSessionState<PeriodConfig[]>("hs_periods", [
         { id: 1, fromYear: 0, fromMonth: 0, toYear: 0, toMonth: 0 },
         { id: 2, fromYear: 0, fromMonth: 0, toYear: 0, toMonth: 0 },
@@ -96,7 +96,7 @@ export default function HospitalStatsPage() {
     const [error, setError] = useState<string | null>(null);
     const [showRatio, setShowRatio] = useSessionState("hs_showRatio", false);
     const [showDiff, setShowDiff] = useSessionState("hs_showDiff", false);
-    const [ymLoading, setYmLoading] = useState(true);
+    const [ymLoading, setYmLoading] = useState(yearMonths.length === 0);
 
     // Fetch available year-months
     useEffect(() => {

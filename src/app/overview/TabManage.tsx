@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSessionState } from "@/hooks/useSessionState";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
@@ -9,17 +10,17 @@ import SearchBuilder, { SearchCondition } from "@/components/ui/SearchBuilder";
 
 export default function TabManage() {
     /* ── State ── */
-    const [years, setYears] = useState<number[]>([]);
-    const [columns, setColumns] = useState<string[]>([]);
-    const [fromYear, setFromYear] = useState<number>(0);
-    const [toYear, setToYear] = useState<number>(0);
+    const [years, setYears] = useSessionState<number[]>("mg_years", []);
+    const [columns, setColumns] = useSessionState<string[]>("mg_columns", []);
+    const [fromYear, setFromYear] = useSessionState<number>("mg_fromYear", 0);
+    const [toYear, setToYear] = useSessionState<number>("mg_toYear", 0);
     const [loading, setLoading] = useState(false);
-    const [initialLoading, setInitialLoading] = useState(true);
+    const [initialLoading, setInitialLoading] = useState(years.length === 0);
     const [error, setError] = useState<string | null>(null);
 
     // Data
-    const [data, setData] = useState<Record<string, unknown>[] | null>(null);
-    const [totalRows, setTotalRows] = useState(0);
+    const [data, setData] = useSessionState<Record<string, unknown>[] | null>("mg_data", null);
+    const [totalRows, setTotalRows] = useSessionState("mg_totalRows", 0);
 
     // Search
     const [conditions, setConditions] = useState<SearchCondition[]>([
@@ -49,7 +50,7 @@ export default function TabManage() {
                 const cols: string[] = d.columns || [];
                 setYears(yrs);
                 setColumns(cols);
-                if (yrs.length > 0) {
+                if (yrs.length > 0 && fromYear === 0) {
                     setFromYear(yrs[yrs.length - 1]); // oldest
                     setToYear(yrs[0]); // newest
                 }
