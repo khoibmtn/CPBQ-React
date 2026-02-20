@@ -158,7 +158,9 @@ export default function DataTable({
                                                 {col.render
                                                     ? col.render(val, row)
                                                     : val != null
-                                                        ? String(val)
+                                                        ? (typeof val === "object" && val !== null && "value" in (val as Record<string, unknown>))
+                                                            ? String((val as Record<string, unknown>).value)
+                                                            : String(val)
                                                         : ""}
                                             </td>
                                         );
