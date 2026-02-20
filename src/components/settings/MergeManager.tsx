@@ -137,8 +137,10 @@ export default function MergeManager() {
         );
     }
 
-    // Build unique short_name list for targets
-    const uniqueNames = [...new Set(khoaOptions.map((o) => o.short_name))];
+    // All display strings for dropdowns
+    const allDisplays = khoaOptions.map((o) => o.display);
+    const displayToOption: Record<string, KhoaOption> = {};
+    khoaOptions.forEach((o) => { displayToOption[o.display] = o; });
 
     return (
         <div>
@@ -150,15 +152,44 @@ export default function MergeManager() {
             </div>
 
             {groups.map((group, gi) => {
+                // Find the target display entry (first matching display for this short_name)
+                const targetDisplays = nameToDisplays[group.target_khoa] || [];
+                const targetDisplay = targetDisplays[0] || group.target_khoa;
+                const targetOption = displayToOption[targetDisplay];
+                const targetValidFrom = targetOption?.valid_from ?? null;
+
                 // Sources used in other groups
                 const otherSources = new Set<string>();
                 groups.forEach((g, i) => {
                     if (i !== gi) g.sources.forEach((s) => otherSources.add(s));
                 });
 
-                // Available sources: not target, not in other groups
-                const availableSources = uniqueNames.filter(
-                    (n) => n !== group.target_khoa && !otherSources.has(n) && !group.sources.includes(n)
+                // Filter eligible source options — matching original _is_eligible_source logic
+                const eligibleSourceOptions = khoaOptions.filter((o) => {
+                    // Not the target itself
+                    if (o.short_name === group.target_khoa) return false;
+                    // Not in other groups
+                    if (otherSources.has(o.short_name)) return false;
+                    // Already added as source in this group
+                    if (group.sources.includes(o.short_name)) return false;
+
+                    // Validity filtering (only if target has valid_from)
+                    if (targetValidFrom) {
+                        const vt = o.valid_to;
+                        const vf = o.valid_from;
+                        // Case 1: source expired before target started
+                        if (vt && vt < targetValidFrom) return true;
+                        // Case 2: no validity dates but has thu_tu
+                        if (!vf && !vt && o.thu_tu) return true;
+                        return false;
+                    }
+                    // No target valid_from → show all
+                    return true;
+                });
+
+                // Sort by makhoa for display
+                const sortedEligible = [...eligibleSourceOptions].sort((a, b) =>
+                    a.makhoa.localeCompare(b.makhoa)
                 );
 
                 return (
@@ -170,12 +201,15 @@ export default function MergeManager() {
                             </label>
                             <select
                                 className="form-select"
-                                value={group.target_khoa}
-                                onChange={(e) => setTarget(gi, e.target.value)}
+                                value={targetDisplay}
+                                onChange={(e) => {
+                                    const opt = displayToOption[e.target.value];
+                                    if (opt) setTarget(gi, opt.short_name);
+                                }}
                                 style={{ flex: 1 }}
                             >
-                                {uniqueNames.map((n) => (
-                                    <option key={n} value={n}>{n}</option>
+                                {allDisplays.map((d) => (
+                                    <option key={d} value={d}>{d}</option>
                                 ))}
                             </select>
                             <button
@@ -204,19 +238,20 @@ export default function MergeManager() {
                                 );
                             })}
 
-                            {/* Add source dropdown */}
-                            {availableSources.length > 0 && (
+                            {/* Add source dropdown — shows display format with validity filtering */}
+                            {sortedEligible.length > 0 && (
                                 <select
                                     className="form-select"
                                     value=""
                                     onChange={(e) => {
-                                        if (e.target.value) addSource(gi, e.target.value);
+                                        const opt = displayToOption[e.target.value];
+                                        if (opt) addSource(gi, opt.short_name);
                                     }}
                                     style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}
                                 >
                                     <option value="">-- Chọn khoa để thêm --</option>
-                                    {availableSources.map((n) => (
-                                        <option key={n} value={n}>{n}</option>
+                                    {sortedEligible.map((o) => (
+                                        <option key={o.display} value={o.display}>{o.display}</option>
                                     ))}
                                 </select>
                             )}
@@ -239,3 +274,4 @@ export default function MergeManager() {
         </div>
     );
 }
+
