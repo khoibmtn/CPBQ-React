@@ -39,7 +39,6 @@ export default function PeriodSelector({
         const updated = periods.map((p) => {
             if (p.id !== id) return p;
             const next = { ...p, [field]: value };
-            // Auto-adjust months when year changes
             if (field === "fromYear") {
                 const months = getMonthsForYear(value);
                 if (months.length > 0 && !months.includes(next.fromMonth)) {
@@ -79,138 +78,107 @@ export default function PeriodSelector({
 
     return (
         <div className="period-selector">
-            <div className="period-list">
+            {/* Period rows */}
+            <div className="period-rows">
                 {periods.map((p, idx) => {
                     const color = getPeriodColor(idx);
                     const label = formatPeriodLabel(
-                        p.fromYear,
-                        p.fromMonth,
-                        p.toYear,
-                        p.toMonth
+                        p.fromYear, p.fromMonth, p.toYear, p.toMonth
                     );
 
                     return (
-                        <div
-                            key={p.id}
-                            className="period-card"
-                            style={{
-                                borderColor: color.border,
-                                background: color.bg,
-                            }}
-                        >
-                            <div className="period-header">
-                                <span
-                                    className="period-badge"
-                                    style={{ background: color.border }}
+                        <div key={p.id} className="period-row">
+                            {/* Badge */}
+                            <span
+                                className="period-badge"
+                                style={{ backgroundColor: color.border }}
+                                title={label}
+                            >
+                                {idx + 1}
+                            </span>
+
+                            {/* From Year */}
+                            <select
+                                className="form-select form-select-sm"
+                                value={p.fromYear}
+                                onChange={(e) =>
+                                    updatePeriod(p.id, "fromYear", +e.target.value)
+                                }
+                            >
+                                {years.map((y) => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+
+                            {/* From Month */}
+                            <select
+                                className="form-select form-select-sm"
+                                value={p.fromMonth}
+                                onChange={(e) =>
+                                    updatePeriod(p.id, "fromMonth", +e.target.value)
+                                }
+                            >
+                                {getMonthsForYear(p.fromYear).map((m) => (
+                                    <option key={m} value={m}>
+                                        Tháng {m}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Arrow */}
+                            <span className="period-arrow">→</span>
+
+                            {/* To Year */}
+                            <select
+                                className="form-select form-select-sm"
+                                value={p.toYear}
+                                onChange={(e) =>
+                                    updatePeriod(p.id, "toYear", +e.target.value)
+                                }
+                            >
+                                {years.map((y) => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+
+                            {/* To Month */}
+                            <select
+                                className="form-select form-select-sm"
+                                value={p.toMonth}
+                                onChange={(e) =>
+                                    updatePeriod(p.id, "toMonth", +e.target.value)
+                                }
+                            >
+                                {getMonthsForYear(p.toYear).map((m) => (
+                                    <option key={m} value={m}>
+                                        Tháng {m}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Delete button */}
+                            {periods.length > 1 && (
+                                <button
+                                    className="period-delete-btn"
+                                    onClick={() => removePeriod(p.id)}
+                                    title="Xóa khoảng thời gian"
                                 >
-                                    {label}
-                                </span>
-                                {periods.length > 1 && (
-                                    <button
-                                        className="period-remove"
-                                        onClick={() => removePeriod(p.id)}
-                                        title="Xóa khoảng thời gian"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                            <div className="period-fields">
-                                <div className="period-range">
-                                    <label className="form-label">Từ</label>
-                                    <div className="period-ym">
-                                        <select
-                                            className="form-select form-select-sm"
-                                            value={p.fromMonth}
-                                            onChange={(e) =>
-                                                updatePeriod(
-                                                    p.id,
-                                                    "fromMonth",
-                                                    +e.target.value
-                                                )
-                                            }
-                                        >
-                                            {getMonthsForYear(p.fromYear).map(
-                                                (m) => (
-                                                    <option key={m} value={m}>
-                                                        T{m}
-                                                    </option>
-                                                )
-                                            )}
-                                        </select>
-                                        <select
-                                            className="form-select form-select-sm"
-                                            value={p.fromYear}
-                                            onChange={(e) =>
-                                                updatePeriod(
-                                                    p.id,
-                                                    "fromYear",
-                                                    +e.target.value
-                                                )
-                                            }
-                                        >
-                                            {years.map((y) => (
-                                                <option key={y} value={y}>
-                                                    {y}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="period-range">
-                                    <label className="form-label">Đến</label>
-                                    <div className="period-ym">
-                                        <select
-                                            className="form-select form-select-sm"
-                                            value={p.toMonth}
-                                            onChange={(e) =>
-                                                updatePeriod(
-                                                    p.id,
-                                                    "toMonth",
-                                                    +e.target.value
-                                                )
-                                            }
-                                        >
-                                            {getMonthsForYear(p.toYear).map(
-                                                (m) => (
-                                                    <option key={m} value={m}>
-                                                        T{m}
-                                                    </option>
-                                                )
-                                            )}
-                                        </select>
-                                        <select
-                                            className="form-select form-select-sm"
-                                            value={p.toYear}
-                                            onChange={(e) =>
-                                                updatePeriod(
-                                                    p.id,
-                                                    "toYear",
-                                                    +e.target.value
-                                                )
-                                            }
-                                        >
-                                            {years.map((y) => (
-                                                <option key={y} value={y}>
-                                                    {y}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
+                                    🗑️
+                                </button>
+                            )}
                         </div>
                     );
                 })}
             </div>
 
+            {/* Action buttons */}
             <div className="period-actions">
                 <button
                     className="btn btn-secondary"
                     onClick={addPeriod}
                     disabled={periods.length >= 6}
                 >
-                    ➕ Thêm khoảng thời gian
+                    ➕ Thêm khoảng so sánh
                 </button>
                 <button
                     className="btn btn-primary"

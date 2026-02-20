@@ -55,6 +55,7 @@ export async function GET() {
 
         // Merge rules
         let mergeRules: Record<string, string> = {};
+        let targetEstablished: Record<string, string> = {};
         try {
             const mergeTable = getFullTableId(LOOKUP_KHOA_MERGE_TABLE);
             const mergeQuery = `SELECT source_khoa, target_khoa FROM \`${mergeTable}\``;
@@ -62,6 +63,40 @@ export async function GET() {
             mergeRules = Object.fromEntries(
                 mergeRows.map((r) => [r.source_khoa, r.target_khoa])
             );
+
+            // Get establishment dates for merge targets
+            if (mergeRows.length > 0) {
+                const targetNames = [...new Set(mergeRows.map((r) => r.target_khoa))];
+                try {
+                    const khoaTable = getFullTableId(LOOKUP_KHOA_TABLE);
+                    const namesCsv = targetNames.map((n) => `'${n.replace(/'/g, "\\'")}'`).join(", ");
+                    const vfQuery = `
+                        SELECT short_name, MIN(valid_from) AS vf
+                        FROM \`${khoaTable}\`
+                        WHERE short_name IN (${namesCsv})
+                        GROUP BY short_name
+                    `;
+                    const vfRows = await runQuery<{ short_name: string; vf: number | null }>(vfQuery);
+                    for (const row of vfRows) {
+                        if (row.vf) {
+                            const vf = Number(row.vf);
+                            let year: number, month: number, day: number;
+                            if (vf > 999999) {
+                                year = Math.floor(vf / 10000);
+                                month = Math.floor((vf % 10000) / 100);
+                                day = vf % 100;
+                            } else {
+                                year = Math.floor(vf / 100);
+                                month = vf % 100;
+                                day = 1;
+                            }
+                            targetEstablished[row.short_name] = `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
+                        }
+                    }
+                } catch {
+                    // Lookup table may not have valid_from
+                }
+            }
         } catch {
             // Lookup table may not exist yet
         }
@@ -71,6 +106,7 @@ export async function GET() {
             khoaOrder,
             profileNames,
             mergeRules,
+            targetEstablished,
         });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";

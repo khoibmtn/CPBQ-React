@@ -165,30 +165,31 @@ export default function MergeManager() {
                 });
 
                 // Filter eligible source options — matching original _is_eligible_source logic
-                const eligibleSourceOptions = khoaOptions.filter((o) => {
-                    // Not the target itself
+                // Step 1: filter by target, other groups, and validity (NOT by current group sources)
+                const eligibleAll = khoaOptions.filter((o) => {
                     if (o.short_name === group.target_khoa) return false;
-                    // Not in other groups
                     if (otherSources.has(o.short_name)) return false;
-                    // Already added as source in this group
-                    if (group.sources.includes(o.short_name)) return false;
 
                     // Validity filtering (only if target has valid_from)
                     if (targetValidFrom) {
                         const vt = o.valid_to;
                         const vf = o.valid_from;
-                        // Case 1: source expired before target started
                         if (vt && vt < targetValidFrom) return true;
-                        // Case 2: no validity dates but has thu_tu
                         if (!vf && !vt && o.thu_tu) return true;
                         return false;
                     }
-                    // No target valid_from → show all
                     return true;
                 });
 
+                // Step 2: for the dropdown, exclude options already shown as sources
+                const alreadyShownDisplays = new Set<string>();
+                group.sources.forEach((src) => {
+                    (nameToDisplays[src] || []).forEach((d) => alreadyShownDisplays.add(d));
+                });
+                const remaining = eligibleAll.filter((o) => !alreadyShownDisplays.has(o.display));
+
                 // Sort by makhoa for display
-                const sortedEligible = [...eligibleSourceOptions].sort((a, b) =>
+                const sortedEligible = [...remaining].sort((a, b) =>
                     a.makhoa.localeCompare(b.makhoa)
                 );
 

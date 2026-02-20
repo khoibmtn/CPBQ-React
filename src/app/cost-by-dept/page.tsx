@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import InfoBanner from "@/components/ui/InfoBanner";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -11,6 +11,7 @@ import {
     DEFAULT_COLUMNS,
     getActiveColumns,
     ProfileItem,
+    formatPeriodLabel,
 } from "@/lib/metrics";
 
 interface InitData {
@@ -18,6 +19,7 @@ interface InitData {
     khoaOrder: Record<string, number>;
     profileNames: string[];
     mergeRules: Record<string, string>;
+    targetEstablished: Record<string, string>;
 }
 
 type Row = Record<string, number>;
@@ -145,6 +147,56 @@ export default function CostByDeptPage() {
         }
     }, [periods, selectedProfile]);
 
+    /* ── Merge warning ── */
+    const mergeWarning = useMemo(() => {
+        if (!results || !initData) return null;
+        const mergeRules = initData.mergeRules;
+        if (!mergeRules || Object.keys(mergeRules).length === 0) return null;
+        if (results.length < 2) return null;
+
+        // Collect unique khoa names per period (BEFORE merge)
+        const periodKhoas: { label: string; khoas: Set<string> }[] = results.map((pr) => ({
+            label: formatPeriodLabel(pr.period.fromYear, pr.period.fromMonth, pr.period.toYear, pr.period.toMonth),
+            khoas: new Set(pr.data.map((r) => r.khoa as unknown as string)),
+        }));
+
+        // Build reverse rules: target → [sources]
+        const reverseRules: Record<string, string[]> = {};
+        for (const [src, tgt] of Object.entries(mergeRules)) {
+            if (!reverseRules[tgt]) reverseRules[tgt] = [];
+            reverseRules[tgt].push(src);
+        }
+
+        const changes: string[] = [];
+        for (const [target, sources] of Object.entries(reverseRules)) {
+            const targetInAny = periodKhoas.some((pk) => pk.khoas.has(target));
+            if (!targetInAny) continue;
+
+            const estStr = initData.targetEstablished?.[target]
+                ? ` (thành lập từ ${initData.targetEstablished[target]})`
+                : "";
+
+            for (const pk of periodKhoas) {
+                const foundSources = sources.filter((s) => pk.khoas.has(s));
+                if (foundSources.length === 0) continue;
+                const srcText = foundSources.join(", ");
+                const targetExists = pk.khoas.has(target);
+                if (targetExists) {
+                    changes.push(
+                        `Chu kỳ ${pk.label}: Số liệu khoa ${srcText} gộp vào khoa ${target}${estStr}`
+                    );
+                } else {
+                    changes.push(
+                        `Chu kỳ ${pk.label}: Số liệu ${srcText} → gộp lại thành ${target}${estStr}`
+                    );
+                }
+            }
+        }
+
+        if (changes.length === 0) return null;
+        return changes;
+    }, [results, initData]);
+
     /* ── Render ── */
     if (initLoading) {
         return (
@@ -268,6 +320,21 @@ export default function CostByDeptPage() {
             {/* Comparison table */}
             {results && (
                 <>
+                    {/* Merge warning */}
+                    {mergeWarning && (
+                        <InfoBanner type="warning">
+                            <strong>⚠️ Phát hiện thay đổi cấu trúc khoa giữa các khoảng thời gian:</strong>
+                            <ul style={{ margin: "0.5rem 0 0 1rem", padding: 0 }}>
+                                {mergeWarning.map((msg, i) => (
+                                    <li key={i} style={{ marginBottom: "0.25rem" }}>{msg}</li>
+                                ))}
+                            </ul>
+                            <p style={{ marginTop: "0.5rem", fontStyle: "italic", opacity: 0.8 }}>
+                                Số liệu gộp có thể chưa chính xác nếu cấu trúc khoa thay đổi nhiều lần.
+                            </p>
+                        </InfoBanner>
+                    )}
+
                     <SectionTitle icon="📊">Bảng so sánh</SectionTitle>
                     <ComparisonTable
                         periodsData={results}
