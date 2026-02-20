@@ -521,7 +521,7 @@ export default function HospitalStatsPage() {
                                             {GROUPS.map((g) => {
                                                 const vals = r.values?.[g] || [];
                                                 return (
-                                                    <>
+                                                    <Fragment key={g}>
                                                         {vals.map((v, pi) => (
                                                             <td
                                                                 key={`${g}-${pi}`}
@@ -563,7 +563,7 @@ export default function HospitalStatsPage() {
                                                                 </td>
                                                             );
                                                         })()}
-                                                    </>
+                                                    </Fragment>
                                                 );
                                             })}
                                         </tr>

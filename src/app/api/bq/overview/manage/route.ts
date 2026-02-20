@@ -182,9 +182,11 @@ export async function DELETE(request: Request) {
         const ROW_KEY_COLS = [
             "ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra",
         ];
+        const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
 
         const client = getBqClient();
         let deletedCount = 0;
+        const errors: string[] = [];
 
         for (const row of rows) {
             const conditions: string[] = [];
@@ -198,6 +200,10 @@ export async function DELETE(request: Request) {
                     conditions.push(`${col} IS NULL`);
                 } else if (typeof val === "number") {
                     conditions.push(`${col} = ${val}`);
+                } else if (DATETIME_COLS.has(col)) {
+                    // Use DATETIME() for proper datetime comparison
+                    const safeVal = String(val).replace(/'/g, "\\'");
+                    conditions.push(`${col} = DATETIME('${safeVal}')`);
                 } else {
                     const safeVal = String(val).replace(/'/g, "\\'");
                     conditions.push(`${col} = '${safeVal}'`);
@@ -205,16 +211,25 @@ export async function DELETE(request: Request) {
             }
             const whereClause = conditions.join(" AND ");
             const deleteQ = `DELETE FROM \`${FULL_TABLE_ID}\` WHERE ${whereClause}`;
+            console.log("[DELETE] SQL:", deleteQ);
             try {
                 const [job] = await client.createQueryJob({ query: deleteQ });
-                await job.getQueryResults();
-                deletedCount++;
-            } catch {
-                // Skip individual row errors
+                const [results] = await job.getQueryResults();
+                const numDmlAffectedRows = job.metadata?.statistics?.query?.numDmlAffectedRows;
+                console.log("[DELETE] Affected rows:", numDmlAffectedRows);
+                deletedCount += Number(numDmlAffectedRows) || 0;
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error("[DELETE] Error:", msg);
+                errors.push(msg);
             }
         }
 
-        return NextResponse.json({ deletedCount, total: rows.length });
+        return NextResponse.json({
+            deletedCount,
+            total: rows.length,
+            ...(errors.length > 0 ? { errors } : {}),
+        });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json({ error: msg }, { status: 500 });
