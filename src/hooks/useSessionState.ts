@@ -9,25 +9,27 @@ export function useSessionState<T>(
     key: string,
     initialValue: T
 ): [T, React.Dispatch<React.SetStateAction<T>>] {
-    const [value, setValue] = useState<T>(() => {
-        if (typeof window === "undefined") return initialValue;
+    // 1. Always initialize with initialValue to prevent hydration mismatch (SSR vs Client)
+    const [value, setValue] = useState<T>(initialValue);
+    const isMounted = useRef(false);
+
+    // 2. Hydrate from sessionStorage on mount (client only)
+    useEffect(() => {
         try {
             const stored = sessionStorage.getItem(key);
-            if (stored !== null) return JSON.parse(stored) as T;
+            if (stored !== null) {
+                setValue(JSON.parse(stored) as T);
+            }
         } catch {
             // Invalid JSON or sessionStorage error
         }
-        return initialValue;
-    });
+        // Mark as mounted after initial hydration
+        isMounted.current = true;
+    }, [key]);
 
-    // Track if this is the initial mount to avoid writing the default back
-    const isFirstRender = useRef(true);
-
+    // 3. Persist to sessionStorage on subsequent changes
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
+        if (!isMounted.current) return; // Skip persisting during initial render phase
         try {
             sessionStorage.setItem(key, JSON.stringify(value));
         } catch {
