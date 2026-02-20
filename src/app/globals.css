@@ -570,3 +570,343 @@ body {
     padding: 1rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   TAB GROUP
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.tab-group {
+  margin-bottom: 1.5rem;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--text-body);
+  background: var(--accent-muted);
+}
+
+.tab-btn.active {
+  color: var(--accent-light);
+  border-bottom-color: var(--accent);
+}
+
+.tab-icon {
+  font-size: 1rem;
+}
+
+.tab-content {
+  padding: 0.25rem 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PIVOT TABLE ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.pivot-table th.group-header-ngoai {
+  background: rgba(37, 99, 235, 0.8);
+  color: white;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pivot-table th.group-header-noi {
+  background: rgba(234, 88, 12, 0.8);
+  color: white;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pivot-table th.sub-header-ngoai {
+  background: rgba(30, 64, 175, 0.3);
+  color: var(--tbl-subtotal-color);
+  text-align: center;
+  font-size: 11px;
+}
+
+.pivot-table th.sub-header-ngoai.subtotal {
+  background: rgba(30, 64, 175, 0.5);
+  font-weight: 700;
+}
+
+.pivot-table th.sub-header-noi {
+  background: rgba(154, 52, 18, 0.3);
+  color: var(--tbl-subtotal-color);
+  text-align: center;
+  font-size: 11px;
+}
+
+.pivot-table th.sub-header-noi.subtotal {
+  background: rgba(154, 52, 18, 0.5);
+  font-weight: 700;
+}
+
+.pivot-table td.subtotal-col-ngoai {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.pivot-table td.subtotal-col-noi {
+  background: rgba(249, 115, 22, 0.05);
+  border-left: 1px solid rgba(249, 115, 22, 0.1);
+}
+
+.pivot-table td.subtotal-col-tong {
+  background: rgba(16, 185, 129, 0.05);
+  border-left: 1px solid rgba(16, 185, 129, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DATA TABLE COMPACT + SELECTION
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.data-table-compact th {
+  padding: 0.5rem 0.625rem;
+  font-size: 10.5px;
+}
+
+.data-table-compact td {
+  padding: 0.375rem 0.625rem;
+  font-size: 11.5px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-table-container {
+  margin-bottom: 0.5rem;
+}
+
+.data-table-container .data-table-wrapper {
+  max-height: 500px;
+  overflow: auto;
+}
+
+.data-table-container .data-table-wrapper.sticky-header thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.data-table tr.row-selected {
+  background: var(--accent-muted) !important;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.data-table-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PAGINATION BAR
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-muted);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.pagination-size {
+  flex-shrink: 0;
+}
+
+.pagination-size .form-select-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-info {
+  white-space: nowrap;
+}
+
+.pagination-summary {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.pagination-selected {
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SEARCH BUILDER
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.search-builder {
+  margin-bottom: 0.75rem;
+}
+
+.search-condition-row {
+  margin-bottom: 0.5rem;
+}
+
+.search-operator {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+  padding-left: 0.25rem;
+}
+
+.radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.search-fields {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.search-fields .form-select {
+  flex: 0 0 180px;
+}
+
+.search-fields .form-input {
+  flex: 1;
+}
+
+.search-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FILE UPLOAD ZONE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.file-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-card);
+  margin-top: 0.75rem;
+}
+
+.file-upload-zone:hover {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.upload-placeholder {
+  color: var(--text-muted);
+}
+
+.upload-placeholder .upload-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.upload-placeholder p {
+  font-size: 0.875rem;
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+}
+
+.upload-placeholder small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.file-info .file-icon {
+  font-size: 1.5rem;
+}
+
+.file-info .file-name {
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.file-info .file-size {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FORM LABEL
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+/* ── Disabled buttons ────────────────────────────────────────────────────── */
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}

@@ -1,17 +1,34 @@
+"use client";
+
 import PageHeader from "@/components/ui/PageHeader";
-import InfoBanner from "@/components/ui/InfoBanner";
+import TabGroup from "@/components/ui/TabGroup";
+import TabPivot from "./TabPivot";
+import TabManage from "./TabManage";
+import TabImport from "./TabImport";
+
+const TABS = [
+    { id: "pivot", label: "Số liệu tổng hợp", icon: "📈" },
+    { id: "manage", label: "Quản lý số liệu", icon: "📋" },
+    { id: "import", label: "Import", icon: "📥" },
+];
 
 export default function OverviewPage() {
     return (
         <>
             <PageHeader
                 title="Quản lý số liệu"
-                subtitle="Số liệu tổng hợp · Quản lý dữ liệu · Import Excel"
+                subtitle="Tổng hợp · Quản lý · Import dữ liệu thanh toán BHYT"
                 icon="📊"
             />
-            <InfoBanner type="info">
-                🚧 Trang này đang được phát triển. Vui lòng quay lại sau.
-            </InfoBanner>
+            <TabGroup tabs={TABS} defaultTab="pivot">
+                {(activeTab) => (
+                    <>
+                        {activeTab === "pivot" && <TabPivot />}
+                        {activeTab === "manage" && <TabManage />}
+                        {activeTab === "import" && <TabImport />}
+                    </>
+                )}
+            </TabGroup>
         </>
     );
 }

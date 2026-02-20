@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google-cloud/bigquery": "^8.2.0",
+    "@google-cloud/bigquery": "^7.9.4",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
