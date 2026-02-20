@@ -98,7 +98,7 @@
   --tbl-border: rgba(148, 163, 184, 0.2);
   --tbl-row-even: #ffffff;
   --tbl-row-odd: #eff6ff;
-  --tbl-row-total: #dbe9fe;
+  --tbl-row-total: #bfdbfe;
   --tbl-row-subtotal: #e8ecff;
   --tbl-section-bg: #f1f5f9;
   --tbl-section-color: #1d4ed8;
@@ -1139,6 +1139,11 @@ td.ct-fixed-col:first-child {
   border-right: none;
 }
 
+th.ct-fixed-col:first-child {
+  background: var(--tbl-th-bg) !important;
+  color: var(--tbl-th-color) !important;
+}
+
 td.ct-fixed-col:first-child {
   background: var(--tbl-col-fixed-bg);
 }
@@ -1150,12 +1155,20 @@ td.ct-khoa-col {
   border-left: none !important;
 }
 
+th.ct-khoa-col {
+  background: var(--tbl-th-bg) !important;
+  color: var(--tbl-th-color) !important;
+}
+
 td.ct-khoa-col {
   min-width: 140px;
   white-space: nowrap;
   background: var(--tbl-col-fixed-bg);
   padding-left: 12px;
 }
+
+
+
 
 .ct-idx {
   text-align: center;
@@ -1224,6 +1237,7 @@ td.ct-khoa-col {
 .ct-total-row td {
   background: var(--tbl-row-total);
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .ct-total-row .ct-fixed-col {
@@ -1231,7 +1245,8 @@ td.ct-khoa-col {
 }
 
 .ct-total-label {
-  color: var(--tbl-th-color) !important;
+  color: var(--text-primary) !important;
+  font-weight: 800;
 }
 
 .ct-bold {

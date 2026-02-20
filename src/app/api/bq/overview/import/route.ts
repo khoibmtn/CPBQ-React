@@ -444,6 +444,19 @@ function buildSummary(
         });
 }
 
+/**
+ * Unwrap BigQuery value objects into plain strings for comparison.
+ * BQ returns datetime/timestamp fields as `{ value: "2026-01-02T07:35:00" }`.
+ * Without unwrapping, String({value:...}) becomes "[object Object]".
+ */
+function bqScalar(val: unknown): string {
+    if (val == null) return "";
+    if (typeof val === "object" && val !== null && "value" in (val as Record<string, unknown>)) {
+        return String((val as Record<string, unknown>).value ?? "");
+    }
+    return String(val);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function checkDuplicateCount(client: any, rows: Row[]): Promise<number> {
     const maBnList = [
@@ -474,14 +487,14 @@ async function checkDuplicateCount(client: any, rows: Row[]): Promise<number> {
             // Build set of BQ key tuples
             const bqKeys = new Set(
                 bqRows.map((bqRow: Row) =>
-                    ROW_KEY_COLS.map((c) => String(bqRow[c] ?? "")).join("|")
+                    ROW_KEY_COLS.map((c) => bqScalar(bqRow[c])).join("|")
                 )
             );
 
             // Check rows against BQ keys
             for (const row of rows) {
                 const rowKey = ROW_KEY_COLS.map((c) =>
-                    String(row[c] ?? "")
+                    bqScalar(row[c])
                 ).join("|");
                 if (bqKeys.has(rowKey)) {
                     totalDups++;
@@ -520,13 +533,13 @@ async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number
 
             const bqKeys = new Set(
                 bqRows.map((bqRow: Row) =>
-                    ROW_KEY_COLS.map((c) => String(bqRow[c] ?? "")).join("|")
+                    ROW_KEY_COLS.map((c) => bqScalar(bqRow[c])).join("|")
                 )
             );
 
             rows.forEach((row, idx) => {
                 const rowKey = ROW_KEY_COLS.map((c) =>
-                    String(row[c] ?? "")
+                    bqScalar(row[c])
                 ).join("|");
                 if (bqKeys.has(rowKey)) {
                     dupIndices.add(idx);
