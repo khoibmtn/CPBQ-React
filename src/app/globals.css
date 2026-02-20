@@ -1074,24 +1074,32 @@ body {
 .ct-fixed-col {
   position: sticky;
   z-index: 2;
-  background: var(--card-bg, #fff);
+  background: inherit;
 }
 
+/* TT column */
 .ct-fixed-col:first-child {
   left: 0;
+  background: var(--tbl-col-fixed-bg);
+  border-left: none;
 }
 
+/* Khoa column — overlap TT border to eliminate gap */
 .ct-khoa-col {
-  left: 40px;
+  left: 39px;
   min-width: 140px;
   white-space: nowrap;
-  border-left: none;
+  background: var(--tbl-col-fixed-bg);
+  border-left: none !important;
+  padding-left: 12px;
 }
 
 .ct-idx {
   text-align: center;
   color: var(--tbl-col-fixed-muted);
   width: 40px;
+  max-width: 40px;
+  box-sizing: border-box;
 }
 
 .ct-khoa-name {

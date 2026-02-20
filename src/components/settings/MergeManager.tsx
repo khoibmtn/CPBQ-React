@@ -158,16 +158,20 @@ export default function MergeManager() {
                 const targetOption = displayToOption[targetDisplay];
                 const targetValidFrom = targetOption?.valid_from ?? null;
 
-                // Sources used in other groups
-                const otherSources = new Set<string>();
+                // Collect displays already used in OTHER groups (one display per source)
+                const otherGroupDisplays = new Set<string>();
                 groups.forEach((g, i) => {
-                    if (i !== gi) g.sources.forEach((s) => otherSources.add(s));
+                    if (i !== gi) {
+                        g.sources.forEach((src) => {
+                            const ds = nameToDisplays[src] || [];
+                            if (ds.length > 0) otherGroupDisplays.add(ds[0]);
+                        });
+                    }
                 });
 
-                // Filter eligible source options — exactly matching original _is_eligible_source
+                // Step 1: eligibility — only check target + validity
                 const eligibleAll = khoaOptions.filter((o) => {
                     if (o.short_name === group.target_khoa) return false;
-                    if (otherSources.has(o.short_name)) return false;
 
                     // Validity filtering (only if target has valid_from)
                     if (targetValidFrom) {
@@ -182,12 +186,14 @@ export default function MergeManager() {
                     return true;
                 });
 
-                // Step 2: for the dropdown, exclude options already shown as sources
-                const alreadyShownDisplays = new Set<string>();
+                // Step 2: exclude displays already shown (as chips in THIS or OTHER groups)
+                const shownDisplays = new Set<string>(otherGroupDisplays);
                 group.sources.forEach((src) => {
-                    (nameToDisplays[src] || []).forEach((d) => alreadyShownDisplays.add(d));
+                    // Only add the FIRST display per source (what's shown as chip)
+                    const ds = nameToDisplays[src] || [];
+                    if (ds.length > 0) shownDisplays.add(ds[0]);
                 });
-                const remaining = eligibleAll.filter((o) => !alreadyShownDisplays.has(o.display));
+                const remaining = eligibleAll.filter((o) => !shownDisplays.has(o.display));
 
                 // Sort by makhoa for display
                 const sortedEligible = [...remaining].sort((a, b) =>
