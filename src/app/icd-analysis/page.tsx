@@ -310,8 +310,8 @@ export default function IcdAnalysisPage() {
                                 value={sortPeriodText}
                                 onChange={(e) => setSortPeriodText(e.target.value)}
                             >
-                                {periodTextOptions.map((pt) => (
-                                    <option key={pt} value={pt}>{pt}</option>
+                                {periodTextOptions.map((pt, i) => (
+                                    <option key={`${i}-${pt}`} value={pt}>{pt}</option>
                                 ))}
                             </select>
                         </div>

@@ -28,7 +28,7 @@ export default function TabManage() {
         { field: "", keyword: "", operator: "AND" },
     ]);
     const [searchLoading, setSearchLoading] = useState(false);
-    const [displayData, setDisplayData] = useState<Record<string, unknown>[]>([]);
+    const [displayData, setDisplayData] = useState<Record<string, unknown>[]>(data || []);
     const [isSearching, setIsSearching] = useState(false);
 
     // Selection & delete
