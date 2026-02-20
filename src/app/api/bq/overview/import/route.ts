@@ -270,6 +270,16 @@ function transformRows(rows: Row[], sourceFileName: string): Row[] {
             }
         }
 
+        // Helper to parse messy numbers (e.g., "2,027" or " 1,500.5 ")
+        const parseNum = (v: unknown) => {
+            if (typeof v === "number") return v;
+            if (typeof v === "string") {
+                const cleaned = v.replace(/,/g, "").trim();
+                return cleaned ? Number(cleaned) : NaN;
+            }
+            return NaN;
+        };
+
         // Float columns
         const floatCols = [
             "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau",
@@ -280,7 +290,7 @@ function transformRows(rows: Row[], sourceFileName: string): Row[] {
         ];
         for (const col of floatCols) {
             if (r[col] != null) {
-                const num = Number(r[col]);
+                const num = parseNum(r[col]);
                 r[col] = isNaN(num) ? null : num;
             }
         }
@@ -293,7 +303,7 @@ function transformRows(rows: Row[], sourceFileName: string): Row[] {
         ];
         for (const col of intCols) {
             if (r[col] != null) {
-                const num = Number(r[col]);
+                const num = parseNum(r[col]);
                 r[col] = isNaN(num) ? null : Math.round(num);
             }
         }

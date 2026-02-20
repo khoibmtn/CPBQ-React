@@ -7,6 +7,8 @@ import { MANAGE_EXCLUDE_COLS } from "@/lib/schema";
  * GET /api/bq/overview/manage
  * Returns column list from the view (for search builder)
  */
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         const query = `SELECT * FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\` LIMIT 0`;

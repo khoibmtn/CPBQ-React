@@ -21,6 +21,8 @@ async function ensureTable() {
     await client.query({ query: sql });
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         await ensureTable();

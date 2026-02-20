@@ -471,12 +471,12 @@ export default function HospitalStatsPage() {
                                             </th>
                                         ))}
                                         {showDiff && (
-                                            <th key={`${g}-diff`} style={{ backgroundColor: "var(--tbl-border)" }}>
+                                            <th key={`${g}-diff`} style={{ backgroundColor: "var(--tbl-border)", color: "var(--tbl-subtotal-color)" }}>
                                                 Chênh lệch
                                             </th>
                                         )}
                                         {showRatio && (
-                                            <th key={`${g}-ratio`} style={{ backgroundColor: "var(--tbl-sub-header-bg)" }}>
+                                            <th key={`${g}-ratio`} style={{ backgroundColor: "var(--tbl-sub-header-bg)", color: "var(--tbl-subtotal-color)" }}>
                                                 Tỷ lệ %
                                             </th>
                                         )}

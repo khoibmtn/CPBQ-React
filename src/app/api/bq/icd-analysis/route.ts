@@ -6,6 +6,8 @@ import { PROJECT_ID, DATASET_ID, VIEW_ID } from "@/lib/config";
  * GET /api/bq/icd-analysis
  * Returns: availableYearMonths
  */
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         const ymQuery = `

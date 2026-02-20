@@ -14,6 +14,8 @@ import {
  * GET /api/bq/cost-by-dept
  * Returns: availableYearMonths, profileNames, khoaOrder, mergeRules
  */
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         // Available year-months

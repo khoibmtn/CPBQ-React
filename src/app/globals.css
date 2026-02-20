@@ -1117,10 +1117,12 @@ body {
 
 .ct-diff-th {
   background: var(--tbl-border) !important;
+  color: var(--tbl-subtotal-color) !important;
 }
 
 .ct-ratio-th {
   background: var(--tbl-sub-header-bg, var(--tbl-border)) !important;
+  color: var(--tbl-subtotal-color) !important;
 }
 
 .ct-fixed-col {
@@ -1130,20 +1132,28 @@ body {
 }
 
 /* TT column */
-.ct-fixed-col:first-child {
+th.ct-fixed-col:first-child,
+td.ct-fixed-col:first-child {
   left: 0;
-  background: var(--tbl-col-fixed-bg);
   border-left: none;
   border-right: none;
 }
 
+td.ct-fixed-col:first-child {
+  background: var(--tbl-col-fixed-bg);
+}
+
 /* Khoa column — overlap TT border to eliminate gap */
-.ct-khoa-col {
+th.ct-khoa-col,
+td.ct-khoa-col {
   left: 39px;
+  border-left: none !important;
+}
+
+td.ct-khoa-col {
   min-width: 140px;
   white-space: nowrap;
   background: var(--tbl-col-fixed-bg);
-  border-left: none !important;
   padding-left: 12px;
 }
 

@@ -8,6 +8,8 @@ const COST_FIELDS = [
     "t_vtyt", "t_kham", "t_giuong", "t_tongchi", "t_bhtt", "t_bntt",
 ];
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         const query = `

@@ -6,6 +6,8 @@ import { PROJECT_ID, DATASET_ID, VIEW_ID, FULL_TABLE_ID } from "@/lib/config";
  * GET /api/bq/overview
  * Returns: { years: number[], summary: {...}[] }
  */
+export const dynamic = "force-dynamic";
+
 export async function GET() {
     try {
         // Get available years

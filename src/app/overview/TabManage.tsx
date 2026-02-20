@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -69,7 +69,7 @@ export default function TabManage() {
                 setError(e.message);
                 setInitialLoading(false);
             });
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ── Determine actual method ── */
     const getActualMethod = useCallback(() => {
@@ -136,8 +136,10 @@ export default function TabManage() {
     }, [fromYear, toYear, getActualMethod]);
 
     /* ── Auto-reload data if it was loaded before ── */
+    const hasAutoReloaded = useRef(false);
     useEffect(() => {
-        if (dataLoaded && !data && fromYear > 0 && !loading) {
+        if (dataLoaded && !data && fromYear > 0 && !hasAutoReloaded.current) {
+            hasAutoReloaded.current = true;
             handleLoad();
         }
     }, [dataLoaded, data, fromYear, handleLoad]);

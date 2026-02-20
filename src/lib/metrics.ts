@@ -163,12 +163,12 @@ export function getActiveColumns(profileItems: ProfileItem[] | null): ColumnDef[
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export const PERIOD_COLORS = [
-    { bg: "rgba(59,130,246,0.10)", border: "#3b82f6", label: "#93c5fd" },
-    { bg: "rgba(99,102,241,0.10)", border: "#6366f1", label: "#a5b4fc" },
-    { bg: "rgba(14,165,233,0.10)", border: "#0ea5e9", label: "#7dd3fc" },
-    { bg: "rgba(139,92,246,0.10)", border: "#8b5cf6", label: "#c4b5fd" },
-    { bg: "rgba(6,182,212,0.10)", border: "#06b6d4", label: "#67e8f9" },
-    { bg: "rgba(79,70,229,0.10)", border: "#4f46e5", label: "#a5b4fc" },
+    { bg: "rgba(59,130,246,0.10)", border: "#3b82f6", label: "#93c5fd" },  // 0: Blue
+    { bg: "rgba(249,115,22,0.10)", border: "#f97316", label: "#fdba74" },  // 1: Orange
+    { bg: "rgba(20,184,166,0.10)", border: "#14b8a6", label: "#5eead4" },  // 2: Teal
+    { bg: "rgba(139,92,246,0.10)", border: "#8b5cf6", label: "#c4b5fd" },  // 3: Violet
+    { bg: "rgba(236,72,153,0.10)", border: "#ec4899", label: "#f9a8d4" },  // 4: Pink
+    { bg: "rgba(16,185,129,0.10)", border: "#10b981", label: "#6ee7b7" },  // 5: Emerald
 ];
 
 export function getPeriodColor(index: number) {
