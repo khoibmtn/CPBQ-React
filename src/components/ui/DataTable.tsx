@@ -17,9 +17,11 @@ interface DataTableProps {
     pageSizeOptions?: number[];
     selectable?: boolean;
     selectedRows?: Set<number>;
+    disabledRows?: Set<number>;
     onSelectionChange?: (selected: Set<number>) => void;
     emptyMessage?: string;
     stickyHeader?: boolean;
+    rowClassName?: (globalIdx: number) => string;
 }
 
 export default function DataTable({
@@ -29,9 +31,11 @@ export default function DataTable({
     pageSizeOptions = [10, 20, 30, 50, 100],
     selectable = false,
     selectedRows,
+    disabledRows,
     onSelectionChange,
     emptyMessage = "Không có dữ liệu",
     stickyHeader = false,
+    rowClassName,
 }: DataTableProps) {
     const [pageSize, setPageSize] = useState(initialPageSize);
     const [currentPage, setCurrentPage] = useState(0);
@@ -49,24 +53,27 @@ export default function DataTable({
         [data, startIdx, endIdx]
     );
 
+    // Selectable rows on this page (excluding disabled)
+    const selectablePageIndices = useMemo(() => {
+        const indices: number[] = [];
+        for (let i = startIdx; i < endIdx; i++) {
+            if (!disabledRows?.has(i)) indices.push(i);
+        }
+        return indices;
+    }, [startIdx, endIdx, disabledRows]);
+
     const allPageSelected =
         selectable &&
-        pageData.length > 0 &&
-        pageData.every((_, i) => selectedRows?.has(startIdx + i));
+        selectablePageIndices.length > 0 &&
+        selectablePageIndices.every((i) => selectedRows?.has(i));
 
     const handleSelectAll = () => {
         if (!onSelectionChange) return;
         const newSet = new Set(selectedRows);
         if (allPageSelected) {
-            // Deselect all on this page
-            for (let i = startIdx; i < endIdx; i++) {
-                newSet.delete(i);
-            }
+            for (const i of selectablePageIndices) newSet.delete(i);
         } else {
-            // Select all on this page
-            for (let i = startIdx; i < endIdx; i++) {
-                newSet.add(i);
-            }
+            for (const i of selectablePageIndices) newSet.add(i);
         }
         onSelectionChange(newSet);
     };
@@ -128,17 +135,19 @@ export default function DataTable({
                         {pageData.map((row, localIdx) => {
                             const globalIdx = startIdx + localIdx;
                             const isSelected = selectedRows?.has(globalIdx);
+                            const isDisabled = disabledRows?.has(globalIdx);
+                            const extraClass = rowClassName ? rowClassName(globalIdx) : "";
                             return (
                                 <tr
                                     key={globalIdx}
-                                    className={`${localIdx % 2 === 0 ? "row-even" : "row-odd"} ${isSelected ? "row-selected" : ""
-                                        }`}
+                                    className={`${localIdx % 2 === 0 ? "row-even" : "row-odd"} ${isSelected ? "row-selected" : ""} ${extraClass}`}
                                 >
                                     {selectable && (
                                         <td style={{ textAlign: "center" }}>
                                             <input
                                                 type="checkbox"
                                                 checked={!!isSelected}
+                                                disabled={!!isDisabled}
                                                 onChange={() =>
                                                     handleSelectRow(globalIdx)
                                                 }

@@ -29,7 +29,7 @@ export const SCHEMA_COLS = [
 ] as const;
 
 /** Columns to exclude from user-facing data views */
-export const MANAGE_EXCLUDE_COLS = new Set(["upload_timestamp", "source_file"]);
+export const MANAGE_EXCLUDE_COLS = new Set(["source_file"]);
 
 /** Default columns for searching */
 export const DEFAULT_SEARCH_COLS = [

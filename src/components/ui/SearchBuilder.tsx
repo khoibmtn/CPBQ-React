@@ -12,6 +12,7 @@ interface SearchBuilderProps {
     onConditionsChange: (conditions: SearchCondition[]) => void;
     onSearch: () => void;
     loading?: boolean;
+    extraButtons?: React.ReactNode;
 }
 
 export default function SearchBuilder({
@@ -20,6 +21,7 @@ export default function SearchBuilder({
     onConditionsChange,
     onSearch,
     loading = false,
+    extraButtons,
 }: SearchBuilderProps) {
     const updateCondition = (
         index: number,
@@ -137,20 +139,22 @@ export default function SearchBuilder({
                 </div>
             ))}
 
-            <button
-                className="btn btn-primary"
-                onClick={onSearch}
-                disabled={loading}
-                style={{ marginTop: "0.75rem" }}
-            >
-                {loading ? (
-                    <>
-                        <span className="spinner" /> Đang tìm...
-                    </>
-                ) : (
-                    "🔍 Tìm kiếm"
-                )}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
+                <button
+                    className="btn btn-primary"
+                    onClick={onSearch}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <>
+                            <span className="spinner" /> Đang tìm...
+                        </>
+                    ) : (
+                        "🔍 Tìm kiếm"
+                    )}
+                </button>
+                {extraButtons}
+            </div>
         </div>
     );
 }

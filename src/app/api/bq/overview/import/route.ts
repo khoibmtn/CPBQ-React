@@ -22,7 +22,6 @@ export async function POST(request: Request) {
     try {
         const formData = await request.formData();
         const file = formData.get("file") as File | null;
-        const sheetName = formData.get("sheet") as string | null;
 
         if (!file) {
             return NextResponse.json(
@@ -41,75 +40,72 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 error: "Không tìm thấy sheet nào có đủ 14 cột bắt buộc.",
                 sheets: [],
-                validRows: 0,
-                invalidRows: 0,
-                issues: [],
-                summary: [],
-                duplicateCount: 0,
-                newCount: 0,
             });
         }
 
-        // Pick sheet
-        const targetSheet =
-            sheetName || compatibleSheets[0].sheetName;
-        const sheetData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-            workbook.Sheets[targetSheet],
-            { defval: null }
-        );
+        // Display columns for the preview table
+        const DISPLAY_COLS = [
+            "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh",
+            "dia_chi", "ma_the", "ma_cskcb", "ngay_vao", "ngay_ra",
+            "t_tongchi", "t_bhtt", "nam_qt", "thang_qt",
+        ];
 
-        if (sheetData.length === 0) {
-            return NextResponse.json({
-                sheets: compatibleSheets,
-                validRows: 0,
-                invalidRows: 0,
-                issues: [],
-                summary: [],
-                duplicateCount: 0,
-                newCount: 0,
+        // Process ALL compatible sheets
+        const client = getBqClient();
+        const sheetsData: {
+            sheetName: string;
+            matchedCols: number;
+            validRows: Record<string, unknown>[];
+            invalidCount: number;
+            dupCount: number;
+            newCount: number;
+            issues: { col: string; count: number }[];
+            summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
+        }[] = [];
+
+        for (const sheetInfo of compatibleSheets) {
+            const sheetData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+                workbook.Sheets[sheetInfo.sheetName],
+                { defval: null }
+            );
+            if (sheetData.length === 0) continue;
+
+            // Transform + validate
+            const transformed = transformRows(sheetData, file.name);
+            const { valid, invalid, issues } = validateRows(transformed);
+            const summary = buildSummary(valid);
+
+            // Check duplicates (get indices, not just count)
+            let dupIndices = new Set<number>();
+            try {
+                dupIndices = await getDuplicateIndices(client, valid);
+            } catch {
+                // BigQuery unavailable
+            }
+
+            // Build display rows with isDuplicate flag
+            const displayRows = valid.map((row, idx) => {
+                const display: Record<string, unknown> = { _idx: idx };
+                for (const col of DISPLAY_COLS) {
+                    display[col] = row[col] ?? null;
+                }
+                display._isDuplicate = dupIndices.has(idx);
+                return display;
+            });
+
+            sheetsData.push({
+                sheetName: sheetInfo.sheetName,
+                matchedCols: sheetInfo.matchedCols.length,
+                validRows: displayRows,
+                invalidCount: invalid.length,
+                dupCount: dupIndices.size,
+                newCount: valid.length - dupIndices.size,
+                issues,
+                summary,
             });
         }
 
-        // ── Transform data ──
-        const transformed = transformRows(sheetData, file.name);
-
-        // ── Validate rows ──
-        const { valid, invalid, issues } = validateRows(transformed);
-
-        // ── Build summary ──
-        const summary = buildSummary(valid);
-
-        // ── Check duplicates ──
-        let duplicateCount = 0;
-        let newCount = valid.length;
-        try {
-            const client = getBqClient();
-            const dupCount = await checkDuplicateCount(client, valid);
-            duplicateCount = dupCount;
-            newCount = valid.length - dupCount;
-        } catch {
-            // BigQuery unavailable — skip duplicate check
-        }
-
-        // ── Check lookup codes ──
-        let warnings: string[] = [];
-        try {
-            const client = getBqClient();
-            warnings = await checkLookupCodes(client, valid);
-        } catch {
-            // BigQuery unavailable — skip lookup check
-        }
-
-        return NextResponse.json({
-            sheets: compatibleSheets,
-            validRows: valid.length,
-            invalidRows: invalid.length,
-            issues,
-            summary,
-            duplicateCount,
-            newCount,
-            warnings,
-        });
+        return NextResponse.json({ sheets: sheetsData });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json({ error: msg }, { status: 500 });
@@ -118,8 +114,9 @@ export async function POST(request: Request) {
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    PUT /api/bq/overview/import
-   Body: FormData with file + sheet + action ("upload")
-   Uploads validated rows to BigQuery
+   Body: FormData with file + sheet + rowIndices (JSON array) + mode ("new" | "overwrite")
+   - mode="new": Upload only non-duplicate rows
+   - mode="overwrite": DELETE old duplicates first, then INSERT new versions
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export async function PUT(request: Request) {
@@ -127,6 +124,8 @@ export async function PUT(request: Request) {
         const formData = await request.formData();
         const file = formData.get("file") as File | null;
         const sheetName = formData.get("sheet") as string | null;
+        const rowIndicesStr = formData.get("rowIndices") as string | null;
+        const mode = (formData.get("mode") as string) || "new";
 
         if (!file || !sheetName) {
             return NextResponse.json(
@@ -150,23 +149,76 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: "Không có dòng hợp lệ.", uploaded: 0 });
         }
 
-        const client = getBqClient();
-
-        // Check and remove duplicates first
-        const dupIndices = await getDuplicateIndices(client, valid);
-        const newRows = valid.filter((_, i) => !dupIndices.has(i));
-
-        if (newRows.length === 0) {
-            return NextResponse.json({
-                uploaded: 0,
-                message: "Tất cả dòng đã tồn tại trên BigQuery.",
-            });
+        // Filter by selected row indices if provided
+        let selectedRows = valid;
+        if (rowIndicesStr) {
+            try {
+                const indices: number[] = JSON.parse(rowIndicesStr);
+                const indexSet = new Set(indices);
+                selectedRows = valid.filter((_, i) => indexSet.has(i));
+            } catch {
+                // Invalid JSON — use all valid rows
+            }
         }
 
-        // Upload to BigQuery
-        const uploaded = await uploadToBigQuery(client, newRows);
+        if (selectedRows.length === 0) {
+            return NextResponse.json({ error: "Không có dòng nào được chọn.", uploaded: 0 });
+        }
 
-        return NextResponse.json({ uploaded });
+        const client = getBqClient();
+
+        if (mode === "overwrite") {
+            // True overwrite: DELETE old records by composite key, then INSERT new
+            const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
+            let deletedCount = 0;
+
+            for (const row of selectedRows) {
+                const conditions: string[] = [];
+                for (const col of ROW_KEY_COLS) {
+                    const val = row[col];
+                    if (val === null || val === undefined) {
+                        conditions.push(`${col} IS NULL`);
+                    } else if (typeof val === "number") {
+                        conditions.push(`${col} = ${val}`);
+                    } else if (DATETIME_COLS.has(col)) {
+                        const safeVal = String(val).replace(/'/g, "\\'");
+                        conditions.push(`${col} = DATETIME('${safeVal}')`);
+                    } else {
+                        const safeVal = String(val).replace(/'/g, "\\'");
+                        conditions.push(`${col} = '${safeVal}'`);
+                    }
+                }
+                const whereClause = conditions.join(" AND ");
+                try {
+                    const deleteQ = `DELETE FROM \`${FULL_TABLE_ID}\` WHERE ${whereClause}`;
+                    const [job] = await client.createQueryJob({ query: deleteQ });
+                    await job.getQueryResults();
+                    const affected = Number(job.metadata?.statistics?.query?.numDmlAffectedRows) || 0;
+                    deletedCount += affected;
+                } catch (e: unknown) {
+                    console.error("[OVERWRITE-DELETE]", e instanceof Error ? e.message : e);
+                }
+            }
+            console.log(`[OVERWRITE] Deleted ${deletedCount} old records`);
+
+            // Then insert all selected rows (fresh)
+            const uploaded = await uploadToBigQuery(client, selectedRows);
+            return NextResponse.json({ uploaded, deleted: deletedCount, mode: "overwrite" });
+        } else {
+            // mode="new": Filter out duplicates, upload only new
+            const dupIndices = await getDuplicateIndices(client, selectedRows);
+            const newRows = selectedRows.filter((_, i) => !dupIndices.has(i));
+
+            if (newRows.length === 0) {
+                return NextResponse.json({
+                    uploaded: 0,
+                    message: "Tất cả dòng đã tồn tại trên BigQuery.",
+                });
+            }
+
+            const uploaded = await uploadToBigQuery(client, newRows);
+            return NextResponse.json({ uploaded, mode: "new" });
+        }
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json({ error: msg }, { status: 500 });
@@ -611,40 +663,54 @@ async function checkLookupCodes(client: any, rows: Row[]): Promise<string[]> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function uploadToBigQuery(client: any, rows: Row[]): Promise<number> {
     // Keep only schema columns + metadata
-    const allowedCols = new Set([
+    const allowedCols = [
         ...SCHEMA_COLS,
         "upload_timestamp",
         "source_file",
-    ]);
+    ];
+    const allowedSet = new Set(allowedCols);
 
     const cleanRows = rows.map((row) => {
         const r: Row = {};
         for (const [key, val] of Object.entries(row)) {
-            if (allowedCols.has(key)) {
+            if (allowedSet.has(key)) {
                 r[key] = val;
             }
         }
         return r;
     });
 
-    // Use streaming insert in batches
-    const table = client.dataset(DATASET_ID).table(
-        FULL_TABLE_ID.split(".").pop()
-    );
-    const BATCH = 500;
+    // Use DML INSERT (not streaming insert) to avoid streaming buffer issues
+    // Streaming inserts block DELETE/UPDATE for 30-90 minutes
+    const BATCH = 200; // Smaller batches for DML to avoid query size limits
     let uploaded = 0;
 
     for (let i = 0; i < cleanRows.length; i += BATCH) {
         const batch = cleanRows.slice(i, i + BATCH);
+
+        // Build VALUES clause
+        const valueRows = batch.map((row) => {
+            const vals = allowedCols.map((col) => {
+                const v = row[col];
+                if (v === null || v === undefined) return "NULL";
+                if (typeof v === "number") return String(v);
+                // Escape single quotes in strings
+                const s = String(v).replace(/'/g, "\\'");
+                return `'${s}'`;
+            });
+            return `(${vals.join(", ")})`;
+        });
+
+        const colList = allowedCols.join(", ");
+        const query = `INSERT INTO \`${FULL_TABLE_ID}\` (${colList}) VALUES ${valueRows.join(",\n")}`;
+
         try {
-            await table.insert(batch);
+            const [job] = await client.createQueryJob({ query });
+            await job.getQueryResults();
             uploaded += batch.length;
         } catch (err: unknown) {
-            // Partial insert errors — count individually
-            const e = err as { errors?: { row: unknown }[] };
-            if (e.errors) {
-                uploaded += batch.length - e.errors.length;
-            }
+            console.error("[UPLOAD] DML INSERT error:", err instanceof Error ? err.message : err);
+            // Continue with next batch
         }
     }
 

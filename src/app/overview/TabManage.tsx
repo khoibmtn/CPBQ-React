@@ -227,10 +227,48 @@ export default function TabManage() {
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
+            if (d.errors && d.errors.length > 0) {
+                setError(`Lỗi khi xóa: ${d.errors.join("; ")}`);
+            }
             setDeleteMsg(`✅ Đã xóa ${d.deletedCount} / ${d.total} dòng!`);
             setSelectedRows(new Set());
-            // Reload data
-            await handleLoad();
+
+            // Update total count
+            if (d.deletedCount > 0) {
+                setTotalRows((prev) => Math.max(0, prev - d.deletedCount));
+            }
+
+            // Re-run search to refresh results (instead of full reload which clears everything)
+            if (isSearching) {
+                const activeConds = conditions.filter((c) => c.keyword.trim());
+                if (activeConds.length > 0) {
+                    const searchRes = await fetch("/api/bq/overview/manage", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action: "search",
+                            conditions,
+                            fromYear,
+                            toYear,
+                        }),
+                    });
+                    const sd = await searchRes.json();
+                    if (!sd.error) {
+                        setDisplayData(sd.data || []);
+                    }
+                }
+            } else if (actualMethod === "RAM") {
+                // RAM mode: remove deleted rows from local data
+                const deletedIndices = new Set(selectedRows);
+                const newDisplay = displayData.filter((_, i) => !deletedIndices.has(i));
+                setDisplayData(newDisplay);
+                if (data) {
+                    const rowsToRemoveKeys = new Set(
+                        rowsToDelete.map((r) => JSON.stringify(r))
+                    );
+                    setData(data.filter((r) => !rowsToRemoveKeys.has(JSON.stringify(r))));
+                }
+            }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
@@ -380,6 +418,24 @@ export default function TabManage() {
                         onConditionsChange={setConditions}
                         onSearch={handleSearch}
                         loading={searchLoading}
+                        extraButtons={
+                            selectedRows.size > 0 ? (
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    disabled={deleteLoading}
+                                    style={{ height: 40 }}
+                                >
+                                    {deleteLoading ? (
+                                        <>
+                                            <span className="spinner" /> Đang xóa...
+                                        </>
+                                    ) : (
+                                        `🗑️ Xóa ${selectedRows.size} dòng đã chọn`
+                                    )}
+                                </button>
+                            ) : undefined
+                        }
                     />
 
                     {isSearching && (
@@ -400,32 +456,7 @@ export default function TabManage() {
                         />
                     </div>
 
-                    {/* Delete section */}
-                    {selectedRows.size > 0 && (
-                        <div
-                            style={{
-                                marginTop: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.75rem",
-                            }}
-                        >
-                            <button
-                                className="btn btn-danger"
-                                onClick={() => setShowDeleteConfirm(true)}
-                                disabled={deleteLoading}
-                                style={{ height: 40 }}
-                            >
-                                {deleteLoading ? (
-                                    <>
-                                        <span className="spinner" /> Đang xóa...
-                                    </>
-                                ) : (
-                                    `🗑️ Xóa ${selectedRows.size} dòng đã chọn`
-                                )}
-                            </button>
-                        </div>
-                    )}
+
 
                     {/* Confirm Delete Dialog */}
                     <ConfirmDialog

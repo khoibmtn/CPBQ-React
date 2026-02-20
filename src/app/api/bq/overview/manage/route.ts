@@ -209,6 +209,17 @@ export async function DELETE(request: Request) {
                     conditions.push(`${col} = '${safeVal}'`);
                 }
             }
+
+            // Also match on upload_timestamp to uniquely identify the exact row
+            let ts = row["upload_timestamp"];
+            if (ts != null && typeof ts === "object" && "value" in (ts as Record<string, unknown>)) {
+                ts = (ts as Record<string, unknown>).value;
+            }
+            if (ts != null) {
+                const safeTs = String(ts).replace(/'/g, "\\'");
+                conditions.push(`upload_timestamp = TIMESTAMP('${safeTs}')`);
+            }
+
             const whereClause = conditions.join(" AND ");
             const deleteQ = `DELETE FROM \`${FULL_TABLE_ID}\` WHERE ${whereClause}`;
             console.log("[DELETE] SQL:", deleteQ);
@@ -221,7 +232,12 @@ export async function DELETE(request: Request) {
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
                 console.error("[DELETE] Error:", msg);
-                errors.push(msg);
+                // Translate streaming buffer error to user-friendly message
+                if (msg.includes("streaming buffer")) {
+                    errors.push("Dữ liệu vừa import chưa thể xóa ngay. Vui lòng đợi 30 phút và thử lại.");
+                } else {
+                    errors.push(msg);
+                }
             }
         }
 
