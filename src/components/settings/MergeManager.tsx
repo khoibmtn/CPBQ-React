@@ -164,27 +164,21 @@ export default function MergeManager() {
                     if (i !== gi) g.sources.forEach((s) => otherSources.add(s));
                 });
 
-                // Filter eligible source options — matching original _is_eligible_source logic
-                // Step 1: filter by target, other groups, and validity (NOT by current group sources)
+                // Filter eligible source options — exactly matching original _is_eligible_source
                 const eligibleAll = khoaOptions.filter((o) => {
                     if (o.short_name === group.target_khoa) return false;
+                    if (otherSources.has(o.short_name)) return false;
 
                     // Validity filtering (only if target has valid_from)
                     if (targetValidFrom) {
                         const vt = o.valid_to;
                         const vf = o.valid_from;
                         // Case 1: source expired before target started
-                        if (vt && vt < targetValidFrom) {
-                            // Also exclude if this short_name is in another group
-                            if (otherSources.has(o.short_name)) return false;
-                            return true;
-                        }
-                        // Case 2: no validity dates but has thu_tu → always eligible
+                        if (vt && vt < targetValidFrom) return true;
+                        // Case 2: no validity dates but has thu_tu
                         if (!vf && !vt && o.thu_tu) return true;
                         return false;
                     }
-                    // No target valid_from → show all (except other group sources)
-                    if (otherSources.has(o.short_name)) return false;
                     return true;
                 });
 
