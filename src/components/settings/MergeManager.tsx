@@ -13,7 +13,7 @@ interface KhoaOption {
 
 interface MergeGroup {
     target_khoa: string;
-    sources: string[];
+    sources: string[]; // display strings in component state
 }
 
 export default function MergeManager() {
@@ -26,8 +26,10 @@ export default function MergeManager() {
 
     const displayToName: Record<string, string> = {};
     const nameToDisplays: Record<string, string[]> = {};
+    const displayToOption: Record<string, KhoaOption> = {};
     khoaOptions.forEach((o) => {
         displayToName[o.display] = o.short_name;
+        displayToOption[o.display] = o;
         if (!nameToDisplays[o.short_name]) nameToDisplays[o.short_name] = [];
         nameToDisplays[o.short_name].push(o.display);
     });
@@ -39,8 +41,27 @@ export default function MergeManager() {
             const res = await fetch("/api/bq/merge");
             const data = await res.json();
             if (data.error) throw new Error(data.error);
-            setGroups(data.groups || []);
-            setKhoaOptions(data.khoaOptions || []);
+
+            const opts: KhoaOption[] = data.khoaOptions || [];
+            setKhoaOptions(opts);
+
+            // Build name→display map from fresh opts
+            const n2d: Record<string, string[]> = {};
+            opts.forEach((o) => {
+                if (!n2d[o.short_name]) n2d[o.short_name] = [];
+                n2d[o.short_name].push(o.display);
+            });
+
+            // Convert API groups (short_names) → display strings
+            const apiGroups: { target_khoa: string; sources: string[] }[] = data.groups || [];
+            const converted = apiGroups.map((g) => ({
+                target_khoa: g.target_khoa,
+                sources: g.sources.map((src: string) => {
+                    const ds = n2d[src] || [];
+                    return ds[0] || src; // first display, or raw name as fallback
+                }),
+            }));
+            setGroups(converted);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi tải dữ liệu");
         } finally {
@@ -60,8 +81,16 @@ export default function MergeManager() {
                 return;
             }
         }
+
+        // Convert display strings → short_names for saving, dedup
+        const saveGroups = groups.map((g) => ({
+            target_khoa: g.target_khoa,
+            sources: [...new Set(g.sources.map((d) => displayToName[d] || d))],
+        }));
+
+        // Check no overlap
         const allSources: string[] = [];
-        for (const g of groups) {
+        for (const g of saveGroups) {
             for (const s of g.sources) {
                 if (allSources.includes(s)) {
                     setError(`Khoa "${s}" xuất hiện trong nhiều nhóm gộp!`);
@@ -77,7 +106,7 @@ export default function MergeManager() {
             const res = await fetch("/api/bq/merge", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ groups }),
+                body: JSON.stringify({ groups: saveGroups }),
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
@@ -107,20 +136,22 @@ export default function MergeManager() {
         });
     };
 
-    const addSource = (gi: number, sourceName: string) => {
+    // Add source by DISPLAY string
+    const addSource = (gi: number, display: string) => {
         setGroups((prev) => {
             const updated = [...prev];
-            if (!updated[gi].sources.includes(sourceName)) {
-                updated[gi] = { ...updated[gi], sources: [...updated[gi].sources, sourceName] };
+            if (!updated[gi].sources.includes(display)) {
+                updated[gi] = { ...updated[gi], sources: [...updated[gi].sources, display] };
             }
             return updated;
         });
     };
 
-    const removeSource = (gi: number, sourceName: string) => {
+    // Remove source by DISPLAY string
+    const removeSource = (gi: number, display: string) => {
         setGroups((prev) => {
             const updated = [...prev];
-            updated[gi] = { ...updated[gi], sources: updated[gi].sources.filter((s) => s !== sourceName) };
+            updated[gi] = { ...updated[gi], sources: updated[gi].sources.filter((s) => s !== display) };
             return updated;
         });
     };
@@ -137,10 +168,7 @@ export default function MergeManager() {
         );
     }
 
-    // All display strings for dropdowns
     const allDisplays = khoaOptions.map((o) => o.display);
-    const displayToOption: Record<string, KhoaOption> = {};
-    khoaOptions.forEach((o) => { displayToOption[o.display] = o; });
 
     return (
         <div>
@@ -152,50 +180,37 @@ export default function MergeManager() {
             </div>
 
             {groups.map((group, gi) => {
-                // Find the target display entry (first matching display for this short_name)
+                // Find target display + valid_from
                 const targetDisplays = nameToDisplays[group.target_khoa] || [];
                 const targetDisplay = targetDisplays[0] || group.target_khoa;
                 const targetOption = displayToOption[targetDisplay];
                 const targetValidFrom = targetOption?.valid_from ?? null;
 
-                // Collect displays already used in OTHER groups (one display per source)
+                // Collect displays already used in OTHER groups
                 const otherGroupDisplays = new Set<string>();
                 groups.forEach((g, i) => {
-                    if (i !== gi) {
-                        g.sources.forEach((src) => {
-                            const ds = nameToDisplays[src] || [];
-                            if (ds.length > 0) otherGroupDisplays.add(ds[0]);
-                        });
-                    }
+                    if (i !== gi) g.sources.forEach((d) => otherGroupDisplays.add(d));
                 });
 
                 // Step 1: eligibility — only check target + validity
                 const eligibleAll = khoaOptions.filter((o) => {
                     if (o.short_name === group.target_khoa) return false;
 
-                    // Validity filtering (only if target has valid_from)
                     if (targetValidFrom) {
                         const vt = o.valid_to;
                         const vf = o.valid_from;
-                        // Case 1: source expired before target started
                         if (vt && vt < targetValidFrom) return true;
-                        // Case 2: no validity dates but has thu_tu
                         if (!vf && !vt && o.thu_tu) return true;
                         return false;
                     }
                     return true;
                 });
 
-                // Step 2: exclude displays already shown (as chips in THIS or OTHER groups)
+                // Step 2: exclude displays already shown in THIS or OTHER groups
                 const shownDisplays = new Set<string>(otherGroupDisplays);
-                group.sources.forEach((src) => {
-                    // Only add the FIRST display per source (what's shown as chip)
-                    const ds = nameToDisplays[src] || [];
-                    if (ds.length > 0) shownDisplays.add(ds[0]);
-                });
+                group.sources.forEach((d) => shownDisplays.add(d));
                 const remaining = eligibleAll.filter((o) => !shownDisplays.has(o.display));
 
-                // Sort by makhoa for display
                 const sortedEligible = [...remaining].sort((a, b) =>
                     a.makhoa.localeCompare(b.makhoa)
                 );
@@ -229,30 +244,26 @@ export default function MergeManager() {
                             </button>
                         </div>
 
-                        {/* Source list */}
+                        {/* Source list — chips show display strings directly */}
                         <div style={{ paddingLeft: "0.5rem" }}>
                             <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "0.25rem" }}>
                                 Gộp từ các khoa:
                             </div>
-                            {group.sources.map((src) => {
-                                const displays = nameToDisplays[src] || [src];
-                                return (
-                                    <div key={src} className="merge-source-chip">
-                                        <span>{displays[0]}</span>
-                                        <button onClick={() => removeSource(gi, src)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.8rem" }}>
-                                            ✕
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                            {group.sources.map((srcDisplay) => (
+                                <div key={srcDisplay} className="merge-source-chip">
+                                    <span>{srcDisplay}</span>
+                                    <button onClick={() => removeSource(gi, srcDisplay)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
 
-                            {/* Add source dropdown — always show */}
+                            {/* Add source dropdown */}
                             <select
                                 className="form-select"
                                 value=""
                                 onChange={(e) => {
-                                    const opt = displayToOption[e.target.value];
-                                    if (opt) addSource(gi, opt.short_name);
+                                    if (e.target.value) addSource(gi, e.target.value);
                                 }}
                                 disabled={sortedEligible.length === 0}
                                 style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}
@@ -285,4 +296,3 @@ export default function MergeManager() {
         </div>
     );
 }
-
