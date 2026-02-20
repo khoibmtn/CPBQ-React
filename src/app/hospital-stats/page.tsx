@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
 import PageHeader from "@/components/ui/PageHeader";
 import InfoBanner from "@/components/ui/InfoBanner";
@@ -461,7 +461,7 @@ export default function HospitalStatsPage() {
                             {/* Header row 2 */}
                             <tr>
                                 {GROUPS.map((g) => (
-                                    <>
+                                    <Fragment key={g}>
                                         {periods.map((p, pi) => (
                                             <th
                                                 key={`${g}-${p.id}`}
@@ -480,7 +480,7 @@ export default function HospitalStatsPage() {
                                                 Tỷ lệ %
                                             </th>
                                         )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tr>
                         </thead>
