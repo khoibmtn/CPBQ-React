@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSessionState } from "@/hooks/useSessionState";
 import PageHeader from "@/components/ui/PageHeader";
 import InfoBanner from "@/components/ui/InfoBanner";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -35,17 +36,17 @@ export default function CostByDeptPage() {
     const [initLoading, setInitLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Periods
-    const [periods, setPeriods] = useState<PeriodDef[]>([]);
+    // Persisted state
+    const [periods, setPeriods] = useSessionState<PeriodDef[]>("cbd_periods", []);
     const [loading, setLoading] = useState(false);
-    const [results, setResults] = useState<PeriodResult[] | null>(null);
+    const [results, setResults] = useSessionState<PeriodResult[] | null>("cbd_results", null);
 
     // Options
-    const [showDiff, setShowDiff] = useState(false);
-    const [showRatio, setShowRatio] = useState(false);
-    const [selectedProfile, setSelectedProfile] = useState<string>("");
+    const [showDiff, setShowDiff] = useSessionState("cbd_showDiff", false);
+    const [showRatio, setShowRatio] = useSessionState("cbd_showRatio", false);
+    const [selectedProfile, setSelectedProfile] = useSessionState("cbd_profile", "");
     const [activeColumns, setActiveColumns] = useState<ColumnDef[]>(DEFAULT_COLUMNS);
-    const [useMerge, setUseMerge] = useState(true);
+    const [useMerge, setUseMerge] = useSessionState("cbd_useMerge", true);
 
     /* ── Init ── */
     useEffect(() => {
@@ -59,10 +60,12 @@ export default function CostByDeptPage() {
                 }
                 setInitData(d);
 
-                // Initialize 2 default periods
+                // Initialize default periods ONLY if no persisted periods
                 const yms: { nam_qt: number; thang_qt: number }[] =
                     d.yearMonths || [];
-                if (yms.length > 0) {
+                setPeriods((prev: PeriodDef[]) => {
+                    if (prev.length > 0) return prev; // already have persisted periods
+                    if (yms.length === 0) return prev;
                     const years = [
                         ...new Set(yms.map((ym: { nam_qt: number }) => ym.nam_qt)),
                     ].sort((a, b) => b - a);
@@ -79,7 +82,7 @@ export default function CostByDeptPage() {
                         .map((ym: { thang_qt: number }) => ym.thang_qt)
                         .sort((a: number, b: number) => a - b);
 
-                    setPeriods([
+                    return [
                         {
                             id: 1,
                             fromYear: prevYear,
@@ -94,11 +97,11 @@ export default function CostByDeptPage() {
                             toYear: latestYear,
                             toMonth: latestMonths[latestMonths.length - 1] || 12,
                         },
-                    ]);
-                }
+                    ];
+                });
                 setInitLoading(false);
             })
-            .catch((e) => {
+            .catch((e: Error) => {
                 setError(e.message);
                 setInitLoading(false);
             });

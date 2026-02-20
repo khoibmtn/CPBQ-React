@@ -20,7 +20,7 @@ export default function OverviewPage() {
                 subtitle="Tổng hợp · Quản lý · Import dữ liệu thanh toán BHYT"
                 icon="📊"
             />
-            <TabGroup tabs={TABS} defaultTab="pivot">
+            <TabGroup tabs={TABS} defaultTab="pivot" storageKey="overview_tab">
                 {(activeTab) => (
                     <>
                         {activeTab === "pivot" && <TabPivot />}

@@ -49,7 +49,7 @@ export default function SettingsPage() {
                 gradient="linear-gradient(135deg, rgba(100,116,139,0.9), rgba(71,85,105,0.85))"
             />
 
-            <TabGroup tabs={TABS} defaultTab="loaikcb">
+            <TabGroup tabs={TABS} defaultTab="loaikcb" storageKey="settings_tab">
                 {(activeTab) => (
                     <>
                         {activeTab === "loaikcb" && (

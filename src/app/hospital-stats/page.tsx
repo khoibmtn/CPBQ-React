@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSessionState } from "@/hooks/useSessionState";
 import PageHeader from "@/components/ui/PageHeader";
 import InfoBanner from "@/components/ui/InfoBanner";
 import { fmt, fmtDec, pctChange, diffValue, bq } from "@/lib/formatters";
@@ -85,16 +86,16 @@ function getTotal(data: Record<string, PeriodData>, field: string): number {
 
 export default function HospitalStatsPage() {
     const [yearMonths, setYearMonths] = useState<YearMonth[]>([]);
-    const [periods, setPeriods] = useState<PeriodConfig[]>([
+    const [periods, setPeriods] = useSessionState<PeriodConfig[]>("hs_periods", [
         { id: 1, fromYear: 0, fromMonth: 0, toYear: 0, toMonth: 0 },
         { id: 2, fromYear: 0, fromMonth: 0, toYear: 0, toMonth: 0 },
     ]);
-    const [nextId, setNextId] = useState(3);
-    const [data, setData] = useState<Record<string, PeriodData>[] | null>(null);
+    const [nextId, setNextId] = useSessionState("hs_nextId", 3);
+    const [data, setData] = useSessionState<Record<string, PeriodData>[] | null>("hs_data", null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showRatio, setShowRatio] = useState(false);
-    const [showDiff, setShowDiff] = useState(false);
+    const [showRatio, setShowRatio] = useSessionState("hs_showRatio", false);
+    const [showDiff, setShowDiff] = useSessionState("hs_showDiff", false);
     const [ymLoading, setYmLoading] = useState(true);
 
     // Fetch available year-months
@@ -110,18 +111,21 @@ export default function HospitalStatsPage() {
                 const ym: YearMonth[] = d.yearMonths || [];
                 setYearMonths(ym);
                 if (ym.length > 0) {
-                    const years = [...new Set(ym.map((x) => x.nam_qt))].sort((a, b) => b - a);
-                    const latestYear = years[0];
-                    const monthsForLatest = ym
-                        .filter((x) => x.nam_qt === latestYear)
-                        .map((x) => x.thang_qt)
-                        .sort((a, b) => a - b);
-                    const latestMonth = monthsForLatest[monthsForLatest.length - 1];
-
-                    setPeriods([
-                        { id: 1, fromYear: latestYear, fromMonth: 1, toYear: latestYear, toMonth: latestMonth },
-                        { id: 2, fromYear: latestYear, fromMonth: latestMonth, toYear: latestYear, toMonth: latestMonth },
-                    ]);
+                    // Only set default periods if none persisted
+                    setPeriods((prev) => {
+                        if (prev[0]?.fromYear > 0) return prev; // already have persisted
+                        const years = [...new Set(ym.map((x) => x.nam_qt))].sort((a, b) => b - a);
+                        const latestYear = years[0];
+                        const monthsForLatest = ym
+                            .filter((x) => x.nam_qt === latestYear)
+                            .map((x) => x.thang_qt)
+                            .sort((a, b) => a - b);
+                        const latestMonth = monthsForLatest[monthsForLatest.length - 1];
+                        return [
+                            { id: 1, fromYear: latestYear, fromMonth: 1, toYear: latestYear, toMonth: latestMonth },
+                            { id: 2, fromYear: latestYear, fromMonth: latestMonth, toYear: latestYear, toMonth: latestMonth },
+                        ];
+                    });
                 }
                 setYmLoading(false);
             })
