@@ -239,23 +239,26 @@ export default function MergeManager() {
                                 );
                             })}
 
-                            {/* Add source dropdown — shows display format with validity filtering */}
-                            {sortedEligible.length > 0 && (
-                                <select
-                                    className="form-select"
-                                    value=""
-                                    onChange={(e) => {
-                                        const opt = displayToOption[e.target.value];
-                                        if (opt) addSource(gi, opt.short_name);
-                                    }}
-                                    style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}
-                                >
-                                    <option value="">-- Chọn khoa để thêm --</option>
-                                    {sortedEligible.map((o) => (
-                                        <option key={o.display} value={o.display}>{o.display}</option>
-                                    ))}
-                                </select>
-                            )}
+                            {/* Add source dropdown — always show */}
+                            <select
+                                className="form-select"
+                                value=""
+                                onChange={(e) => {
+                                    const opt = displayToOption[e.target.value];
+                                    if (opt) addSource(gi, opt.short_name);
+                                }}
+                                disabled={sortedEligible.length === 0}
+                                style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}
+                            >
+                                <option value="">
+                                    {sortedEligible.length === 0
+                                        ? "-- Không còn khoa phù hợp --"
+                                        : "-- Chọn khoa để thêm --"}
+                                </option>
+                                {sortedEligible.map((o) => (
+                                    <option key={o.display} value={o.display}>{o.display}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 );
