@@ -86,9 +86,21 @@ export default function TabManage() {
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
-            setData(d.data || []);
-            setDisplayData(d.data || []);
+            const loadedData: Record<string, unknown>[] = d.data || [];
+            setData(loadedData);
+            setDisplayData(loadedData);
             setTotalRows(d.total || 0);
+            // Derive columns from actual data if not yet loaded
+            if (loadedData.length > 0) {
+                const dataCols = Object.keys(loadedData[0]).filter(
+                    (c) => c !== "upload_timestamp" && c !== "source_file"
+                );
+                setColumns(dataCols);
+                // Update search condition default field
+                if (conditions.length === 1 && !conditions[0].keyword) {
+                    setConditions([{ field: dataCols[0] || "", keyword: "", operator: "AND" }]);
+                }
+            }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
@@ -165,7 +177,14 @@ export default function TabManage() {
     };
 
     /* ── Build table columns ── */
-    const tableColumns: Column[] = columns.slice(0, 30).map((col) => ({
+    // Derive columns from actual display data when available
+    const effectiveCols = displayData.length > 0
+        ? Object.keys(displayData[0]).filter(
+            (c) => c !== "upload_timestamp" && c !== "source_file"
+        )
+        : columns;
+
+    const tableColumns: Column[] = effectiveCols.map((col) => ({
         key: col,
         label: col,
         align: col.startsWith("t_") || col === "so_ngay_dtri" ? "right" as const : "left" as const,

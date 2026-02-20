@@ -1,7 +1,7 @@
 /**
  * bigquery.ts – Server-side BigQuery client
  * ==========================================
- * Uses service account credentials from environment variables.
+ * Supports multiple auth methods for flexibility.
  * This file should ONLY be imported in API routes (server-side).
  */
 
@@ -12,18 +12,28 @@ let _client: BigQuery | null = null;
 
 /**
  * Get a singleton BigQuery client.
- * Credentials are loaded from:
- *   - GOOGLE_APPLICATION_CREDENTIALS env var (path to JSON file), OR
- *   - BQ_CLIENT_EMAIL + BQ_PRIVATE_KEY env vars (for Vercel deployment)
+ * Credentials are loaded in this priority order:
+ *   1. BQ_CREDENTIALS_JSON env var (full JSON credentials string — for Vercel)
+ *   2. BQ_CLIENT_EMAIL + BQ_PRIVATE_KEY env vars (service account on Vercel)
+ *   3. GOOGLE_APPLICATION_CREDENTIALS env var / ADC (local development)
  */
 export function getBqClient(): BigQuery {
     if (_client) return _client;
 
+    const credentialsJson = process.env.BQ_CREDENTIALS_JSON;
     const clientEmail = process.env.BQ_CLIENT_EMAIL;
     const privateKey = process.env.BQ_PRIVATE_KEY;
 
-    if (clientEmail && privateKey) {
-        // Vercel deployment: credentials from env vars
+    if (credentialsJson) {
+        // Option 1: Full credentials JSON (OAuth2 or service account)
+        const creds = JSON.parse(credentialsJson);
+        _client = new BigQuery({
+            projectId: PROJECT_ID,
+            location: LOCATION,
+            credentials: creds,
+        });
+    } else if (clientEmail && privateKey) {
+        // Option 2: Service account email + private key
         _client = new BigQuery({
             projectId: PROJECT_ID,
             location: LOCATION,
@@ -33,7 +43,7 @@ export function getBqClient(): BigQuery {
             },
         });
     } else {
-        // Local development: relies on GOOGLE_APPLICATION_CREDENTIALS
+        // Option 3: ADC / GOOGLE_APPLICATION_CREDENTIALS (local dev)
         _client = new BigQuery({
             projectId: PROJECT_ID,
             location: LOCATION,
