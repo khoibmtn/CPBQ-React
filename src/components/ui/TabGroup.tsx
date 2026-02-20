@@ -17,22 +17,28 @@ interface TabGroupProps {
 }
 
 export default function TabGroup({ tabs, defaultTab, storageKey, children }: TabGroupProps) {
-    const [activeTab, setActiveTab] = useState(() => {
-        if (storageKey && typeof window !== "undefined") {
-            try {
-                const stored = sessionStorage.getItem(storageKey);
-                if (stored && tabs.some((t) => t.id === stored)) return stored;
-            } catch { /* ignore */ }
-        }
-        return defaultTab || tabs[0]?.id || "";
-    });
+    // Always initialize with defaultTab to avoid SSR/client hydration mismatch
+    const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || "");
 
+    // Restore from sessionStorage on client mount (after hydration)
     const isFirstRender = useRef(true);
     useEffect(() => {
-        if (!storageKey) return;
-        if (isFirstRender.current) { isFirstRender.current = false; return; }
-        try { sessionStorage.setItem(storageKey, activeTab); } catch { /* ignore */ }
-    }, [storageKey, activeTab]);
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            if (storageKey) {
+                try {
+                    const stored = sessionStorage.getItem(storageKey);
+                    if (stored && tabs.some((t) => t.id === stored)) {
+                        setActiveTab(stored);
+                    }
+                } catch { /* ignore */ }
+            }
+            return;
+        }
+        if (storageKey) {
+            try { sessionStorage.setItem(storageKey, activeTab); } catch { /* ignore */ }
+        }
+    }, [storageKey, activeTab, tabs]);
 
     return (
         <div className="tab-group">

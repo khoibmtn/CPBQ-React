@@ -60,6 +60,14 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { action } = body as { action: string };
 
+        // Normalize year range — always ensure minYear <= maxYear
+        const rawFrom = body.fromYear as number | undefined;
+        const rawTo = body.toYear as number | undefined;
+        if (rawFrom != null && rawTo != null && rawFrom > rawTo) {
+            body.fromYear = rawTo;
+            body.toYear = rawFrom;
+        }
+
         if (action === "count") {
             const { fromYear, toYear } = body as {
                 action: string;
