@@ -189,7 +189,11 @@ export async function DELETE(request: Request) {
         for (const row of rows) {
             const conditions: string[] = [];
             for (const col of ROW_KEY_COLS) {
-                const val = row[col];
+                // Unwrap BQ `{ value: "..." }` objects
+                let val = row[col];
+                if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
+                    val = (val as Record<string, unknown>).value;
+                }
                 if (val === null || val === undefined) {
                     conditions.push(`${col} IS NULL`);
                 } else if (typeof val === "number") {

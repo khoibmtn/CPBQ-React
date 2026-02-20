@@ -6,6 +6,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import InfoBanner from "@/components/ui/InfoBanner";
 import { fmt, fmtDec, pctChange, diffValue, bq } from "@/lib/formatters";
 import { exportHospitalStats, ExportRow } from "@/lib/exportExcel";
+import { PERIOD_COLORS } from "@/lib/metrics";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -55,14 +56,7 @@ const COST_FIELDS: [string, string][] = [
 
 const GROUPS = ["Nội trú", "Ngoại trú", "Tổng"] as const;
 
-const PERIOD_COLORS = [
-    { bg: "rgba(59,130,246,0.10)", border: "#3b82f6", label: "#93c5fd" },
-    { bg: "rgba(99,102,241,0.10)", border: "#6366f1", label: "#a5b4fc" },
-    { bg: "rgba(14,165,233,0.10)", border: "#0ea5e9", label: "#7dd3fc" },
-    { bg: "rgba(139,92,246,0.10)", border: "#8b5cf6", label: "#c4b5fd" },
-    { bg: "rgba(6,182,212,0.10)", border: "#06b6d4", label: "#67e8f9" },
-    { bg: "rgba(79,70,229,0.10)", border: "#4f46e5", label: "#a5b4fc" },
-];
+
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
