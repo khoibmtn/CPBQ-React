@@ -50,6 +50,7 @@
   --tbl-subtotal-color: #e2e8f0;
   --tbl-diff-pos: #4ade80;
   --tbl-diff-neg: #f87171;
+  --tbl-diff-header: #92400e;
 
   /* Overview pivot */
   --bg-table-header: rgba(30, 41, 59, 0.95);
@@ -106,6 +107,7 @@
   --tbl-subtotal-color: #1e293b;
   --tbl-diff-pos: #16a34a;
   --tbl-diff-neg: #dc2626;
+  --tbl-diff-header: #d97706;
 
   --bg-table-header: #f1f5f9;
   --text-table-header: #1e293b;
@@ -1343,8 +1345,9 @@ body {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1353,7 +1356,7 @@ body {
 }
 
 .confirm-dialog {
-  background: var(--card-bg);
+  background: var(--dialog-bg, #ffffff);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 1.5rem;

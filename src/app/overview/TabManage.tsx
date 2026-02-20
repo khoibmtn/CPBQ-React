@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -19,16 +19,18 @@ export default function TabManage() {
     const [initialLoading, setInitialLoading] = useState(years.length === 0);
     const [error, setError] = useState<string | null>(null);
 
-    // Data
-    const [data, setData] = useSessionState<Record<string, unknown>[] | null>("mg_data", null);
-    const [totalRows, setTotalRows] = useSessionState("mg_totalRows", 0);
+    // Data — don't persist large datasets (exceeds 5MB sessionStorage limit)
+    // Instead, persist a flag and auto-reload on mount
+    const [data, setData] = useState<Record<string, unknown>[] | null>(null);
+    const [totalRows, setTotalRows] = useState(0);
+    const [dataLoaded, setDataLoaded] = useSessionState("mg_dataLoaded", false);
 
     // Search
     const [conditions, setConditions] = useState<SearchCondition[]>([
         { field: "", keyword: "", operator: "AND" },
     ]);
     const [searchLoading, setSearchLoading] = useState(false);
-    const [displayData, setDisplayData] = useState<Record<string, unknown>[]>(data || []);
+    const [displayData, setDisplayData] = useState<Record<string, unknown>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
 
     // Selection & delete
@@ -55,7 +57,7 @@ export default function TabManage() {
                     setFromYear(yrs[yrs.length - 1]); // oldest
                     setToYear(yrs[0]); // newest
                 }
-                if (cols.length > 0) {
+                if (cols.length > 0 && !conditions[0].field) {
                     setConditions([{ field: cols[0], keyword: "", operator: "AND" }]);
                 }
                 setInitialLoading(false);
@@ -67,7 +69,7 @@ export default function TabManage() {
     }, []);
 
     /* ── Load data ── */
-    const handleLoad = async () => {
+    const handleLoad = useCallback(async () => {
         setLoading(true);
         setError(null);
         setData(null);
@@ -92,13 +94,12 @@ export default function TabManage() {
             setData(loadedData);
             setDisplayData(loadedData);
             setTotalRows(d.total || 0);
-            // Derive columns from actual data if not yet loaded
+            setDataLoaded(true);
             if (loadedData.length > 0) {
                 const dataCols = Object.keys(loadedData[0]).filter(
                     (c) => c !== "upload_timestamp" && c !== "source_file"
                 );
                 setColumns(dataCols);
-                // Update search condition default field
                 if (conditions.length === 1 && !conditions[0].keyword) {
                     setConditions([{ field: dataCols[0] || "", keyword: "", operator: "AND" }]);
                 }
@@ -108,7 +109,14 @@ export default function TabManage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [fromYear, toYear]);
+
+    /* ── Auto-reload data if it was loaded before ── */
+    useEffect(() => {
+        if (dataLoaded && !data && fromYear > 0 && !loading) {
+            handleLoad();
+        }
+    }, [dataLoaded, data, fromYear, handleLoad]);
 
     /* ── Search ── */
     const handleSearch = async () => {

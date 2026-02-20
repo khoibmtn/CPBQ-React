@@ -166,7 +166,7 @@ export default function IcdTable({
                             <th
                                 className="ct-th"
                                 colSpan={2}
-                                style={{ textAlign: "center", backgroundColor: "var(--tbl-border)" }}
+                                style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}
                             >
                                 Chênh lệch ({diffReverse ? "T-P" : "P-T"})
                             </th>
@@ -189,10 +189,10 @@ export default function IcdTable({
                         })}
                         {showDiff && (
                             <>
-                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-border)" }}>
+                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}>
                                     {diffValueLabel}
                                 </th>
-                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-border)" }}>
+                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}>
                                     %
                                 </th>
                             </>
