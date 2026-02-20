@@ -1070,9 +1070,9 @@ body {
 }
 
 .ct-fixed-col {
-  background: var(--tbl-col-fixed-bg);
   position: sticky;
   z-index: 2;
+  background: var(--card-bg, #fff);
 }
 
 .ct-fixed-col:first-child {
@@ -1106,6 +1106,10 @@ body {
   background: var(--tbl-section-bg) !important;
 }
 
+.ct-section-row .ct-fixed-col {
+  background: var(--tbl-section-bg) !important;
+}
+
 .ct-section-label {
   font-size: 13px;
   font-weight: 700;
@@ -1116,14 +1120,26 @@ body {
   background: var(--tbl-row-even);
 }
 
+.ct-row-even .ct-fixed-col {
+  background: var(--tbl-row-even);
+}
+
 .ct-row-odd {
   background: var(--tbl-row-odd);
 }
 
+.ct-row-odd .ct-fixed-col {
+  background: var(--tbl-row-odd);
+}
+
 .ct-subtotal-row td {
-  background: var(--tbl-row-subtotal, rgba(99, 102, 241, 0.05));
+  background: var(--tbl-row-subtotal, #f0f0ff);
   font-weight: 700;
   font-style: italic;
+}
+
+.ct-subtotal-row .ct-fixed-col {
+  background: var(--tbl-row-subtotal, #f0f0ff) !important;
 }
 
 .ct-subtotal-label {
@@ -1131,8 +1147,12 @@ body {
 }
 
 .ct-total-row td {
-  background: var(--tbl-row-total, rgba(59, 130, 246, 0.08));
+  background: var(--tbl-row-total, #eaf0ff);
   font-weight: 700;
+}
+
+.ct-total-row .ct-fixed-col {
+  background: var(--tbl-row-total, #eaf0ff) !important;
 }
 
 .ct-total-label {

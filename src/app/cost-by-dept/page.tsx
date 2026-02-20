@@ -104,6 +104,26 @@ export default function CostByDeptPage() {
             });
     }, []);
 
+    /* ── Profile change → update columns immediately ── */
+    useEffect(() => {
+        if (!selectedProfile) {
+            setActiveColumns(DEFAULT_COLUMNS);
+            return;
+        }
+        fetch(`/api/bq/profiles?name=${encodeURIComponent(selectedProfile)}`)
+            .then((r) => r.json())
+            .then((d) => {
+                if (d.items && d.items.length > 0) {
+                    setActiveColumns(getActiveColumns(d.items as ProfileItem[]));
+                } else {
+                    setActiveColumns(DEFAULT_COLUMNS);
+                }
+            })
+            .catch(() => {
+                setActiveColumns(DEFAULT_COLUMNS);
+            });
+    }, [selectedProfile]);
+
     /* ── Compare ── */
     const handleCompare = useCallback(async () => {
         setLoading(true);
