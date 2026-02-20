@@ -14,6 +14,8 @@
   --bg-sidebar: #1e293b;
   --bg-card: rgba(30, 41, 59, 0.8);
   --bg-input: rgba(30, 41, 59, 0.6);
+  --dialog-bg: #1e293b;
+  --dialog-text: #f1f5f9;
 
   /* Text  */
   --text-primary: #f1f5f9;
@@ -1357,6 +1359,7 @@ body {
 
 .confirm-dialog {
   background: var(--dialog-bg, #ffffff);
+  color: var(--dialog-text, #1e293b);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 1.5rem;
@@ -1380,13 +1383,14 @@ body {
 .confirm-title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--text-heading);
+  color: inherit;
   margin: 0;
 }
 
 .confirm-body {
   font-size: 0.95rem;
-  color: var(--text-body);
+  color: inherit;
+  opacity: 0.85;
   line-height: 1.6;
   margin-bottom: 1.5rem;
 }

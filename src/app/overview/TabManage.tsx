@@ -10,20 +10,23 @@ import SearchBuilder, { SearchCondition } from "@/components/ui/SearchBuilder";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function TabManage() {
+    const AUTO_THRESHOLD = 3; // ≤3 years → RAM, >3 → BigQuery
+
     /* ── State ── */
     const [years, setYears] = useSessionState<number[]>("mg_years", []);
     const [columns, setColumns] = useSessionState<string[]>("mg_columns", []);
     const [fromYear, setFromYear] = useSessionState<number>("mg_fromYear", 0);
     const [toYear, setToYear] = useSessionState<number>("mg_toYear", 0);
+    const [method, setMethod] = useSessionState<string>("mg_method", "🧠 Tự động");
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(years.length === 0);
     const [error, setError] = useState<string | null>(null);
 
     // Data — don't persist large datasets (exceeds 5MB sessionStorage limit)
-    // Instead, persist a flag and auto-reload on mount
     const [data, setData] = useState<Record<string, unknown>[] | null>(null);
     const [totalRows, setTotalRows] = useState(0);
     const [dataLoaded, setDataLoaded] = useSessionState("mg_dataLoaded", false);
+    const [actualMethod, setActualMethod] = useSessionState("mg_actualMethod", "RAM");
 
     // Search
     const [conditions, setConditions] = useState<SearchCondition[]>([
@@ -68,6 +71,14 @@ export default function TabManage() {
             });
     }, []);
 
+    /* ── Determine actual method ── */
+    const getActualMethod = useCallback(() => {
+        const nYears = toYear - fromYear + 1;
+        if (method === "🧠 Tự động") return nYears <= AUTO_THRESHOLD ? "RAM" : "BigQuery";
+        if (method === "💾 RAM") return "RAM";
+        return "BigQuery";
+    }, [method, fromYear, toYear]);
+
     /* ── Load data ── */
     const handleLoad = useCallback(async () => {
         setLoading(true);
@@ -78,38 +89,51 @@ export default function TabManage() {
         setSelectedRows(new Set());
         setDeleteMsg(null);
 
+        const resolvedMethod = getActualMethod();
+        setActualMethod(resolvedMethod);
+
         try {
-            const res = await fetch("/api/bq/overview/manage", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: "load",
-                    fromYear,
-                    toYear,
-                }),
-            });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error);
-            const loadedData: Record<string, unknown>[] = d.data || [];
-            setData(loadedData);
-            setDisplayData(loadedData);
-            setTotalRows(d.total || 0);
-            setDataLoaded(true);
-            if (loadedData.length > 0) {
-                const dataCols = Object.keys(loadedData[0]).filter(
-                    (c) => c !== "upload_timestamp" && c !== "source_file"
-                );
-                setColumns(dataCols);
-                if (conditions.length === 1 && !conditions[0].keyword) {
-                    setConditions([{ field: dataCols[0] || "", keyword: "", operator: "AND" }]);
+            if (resolvedMethod === "RAM") {
+                // Load all rows into memory
+                const res = await fetch("/api/bq/overview/manage", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "load", fromYear, toYear }),
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+                const loadedData: Record<string, unknown>[] = d.data || [];
+                setData(loadedData);
+                setDisplayData(loadedData);
+                setTotalRows(d.total || 0);
+                if (loadedData.length > 0) {
+                    const dataCols = Object.keys(loadedData[0]).filter(
+                        (c) => c !== "upload_timestamp" && c !== "source_file"
+                    );
+                    setColumns(dataCols);
+                    if (conditions.length === 1 && !conditions[0].keyword) {
+                        setConditions([{ field: dataCols[0] || "", keyword: "", operator: "AND" }]);
+                    }
                 }
+            } else {
+                // BigQuery mode: only count, don't load data
+                const res = await fetch("/api/bq/overview/manage", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "count", fromYear, toYear }),
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+                setData([]); // Empty array to indicate "loaded but no local data"
+                setTotalRows(d.total || 0);
             }
+            setDataLoaded(true);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
             setLoading(false);
         }
-    }, [fromYear, toYear]);
+    }, [fromYear, toYear, getActualMethod]);
 
     /* ── Auto-reload data if it was loaded before ── */
     useEffect(() => {
@@ -122,7 +146,7 @@ export default function TabManage() {
     const handleSearch = async () => {
         const activeConds = conditions.filter((c) => c.keyword.trim());
         if (activeConds.length === 0) {
-            setDisplayData(data || []);
+            setDisplayData(actualMethod === "RAM" ? (data || []) : []);
             setIsSearching(false);
             return;
         }
@@ -131,20 +155,51 @@ export default function TabManage() {
         setSelectedRows(new Set());
 
         try {
-            const res = await fetch("/api/bq/overview/manage", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: "search",
-                    conditions,
-                    fromYear,
-                    toYear,
-                }),
-            });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error);
-            setDisplayData(d.data || []);
-            setIsSearching(true);
+            if (actualMethod === "RAM" && data && data.length > 0) {
+                // Client-side filtering
+                let filtered = [...data];
+                for (let i = 0; i < activeConds.length; i++) {
+                    const cond = activeConds[i];
+                    const keyword = cond.keyword.toLowerCase().trim();
+                    const field = cond.field;
+                    const matchFn = (row: Record<string, unknown>) => {
+                        const val = String(row[field] ?? "").toLowerCase();
+                        return val.includes(keyword);
+                    };
+                    if (i === 0) {
+                        filtered = filtered.filter(matchFn);
+                    } else {
+                        const op = cond.operator || "AND";
+                        if (op === "AND") {
+                            filtered = filtered.filter(matchFn);
+                        } else {
+                            // OR: merge with previous results
+                            const prevFiltered = filtered;
+                            const orResults = (data || []).filter(matchFn);
+                            const combined = new Set([...prevFiltered, ...orResults]);
+                            filtered = Array.from(combined);
+                        }
+                    }
+                }
+                setDisplayData(filtered);
+                setIsSearching(true);
+            } else {
+                // Server-side BigQuery search
+                const res = await fetch("/api/bq/overview/manage", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "search",
+                        conditions,
+                        fromYear,
+                        toYear,
+                    }),
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+                setDisplayData(d.data || []);
+                setIsSearching(true);
+            }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
@@ -196,18 +251,12 @@ export default function TabManage() {
     }));
 
     /* ── Metrics ── */
-    const nMonths =
-        data
-            ? new Set(
-                data.map(
-                    (r) => `${r.nam_qt}-${r.thang_qt}`
-                )
-            ).size
-            : 0;
-    const nCskcb =
-        data
-            ? new Set(data.map((r) => r.ma_cskcb as string)).size
-            : 0;
+    const nMonths = actualMethod === "RAM" && data && data.length > 0
+        ? new Set(data.map((r) => `${r.nam_qt}-${r.thang_qt}`)).size
+        : toYear - fromYear + 1;
+    const nCskcb = actualMethod === "RAM" && data && data.length > 0
+        ? new Set(data.map((r) => r.ma_cskcb as string)).size
+        : "–";
 
     /* ── Render ── */
 
@@ -230,8 +279,8 @@ export default function TabManage() {
             {deleteMsg && <InfoBanner type="success">{deleteMsg}</InfoBanner>}
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
 
-            {/* Year range selector */}
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", marginBottom: "1rem" }}>
+            {/* Year range + method selector */}
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", marginBottom: "0.5rem" }}>
                 <div style={{ flex: 1 }}>
                     <label className="form-label">Năm bắt đầu</label>
                     <select
@@ -258,6 +307,18 @@ export default function TabManage() {
                             ))}
                     </select>
                 </div>
+                <div style={{ flex: 1 }}>
+                    <label className="form-label">Phương pháp</label>
+                    <select
+                        className="form-select"
+                        value={method}
+                        onChange={(e) => setMethod(e.target.value)}
+                    >
+                        <option value="🧠 Tự động">🧠 Tự động</option>
+                        <option value="💾 RAM">💾 RAM</option>
+                        <option value="☁️ BigQuery">☁️ BigQuery</option>
+                    </select>
+                </div>
                 <button
                     className="btn btn-primary"
                     onClick={handleLoad}
@@ -273,9 +334,17 @@ export default function TabManage() {
                     )}
                 </button>
             </div>
+            {data !== null && (
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                    {actualMethod === "RAM" ? "💾" : "☁️"} Phương pháp:
+                    <strong> {actualMethod}</strong>
+                    {" "}• {toYear - fromYear + 1} năm ({fromYear}–{toYear})
+                    {actualMethod === "BigQuery" && " • Tìm kiếm sẽ truy vấn trực tiếp BigQuery"}
+                </div>
+            )}
 
             {/* Metrics */}
-            {data && (
+            {data !== null && (
                 <>
                     <MetricGrid>
                         <MetricCard
@@ -376,7 +445,7 @@ export default function TabManage() {
                 </>
             )}
 
-            {!data && !loading && (
+            {data === null && !loading && (
                 <InfoBanner type="info">
                     Chọn khoảng năm và bấm <strong>Tải dữ liệu</strong> để hiển thị.
                 </InfoBanner>
