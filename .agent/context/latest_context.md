@@ -10,13 +10,14 @@
 
 ## Trạng thái hiện tại — 2026-02-22
 
-### Latest Session (2026-02-22 06:30)
+### Latest Session (2026-02-22 06:40)
 
 #### Tasks Completed
 - [x] **ICD Analysis Excel Export** — Added `exportIcdAnalysis` to `lib/exportExcel.ts` using ExcelJS (same pattern as `exportCostByDept`): merged headers, thin borders, auto-width columns, blue ICD codes, total row. Download button "📥 Tải Excel" added to `icd-analysis/page.tsx`
 - [x] **LookupEditor redesign** — Rewrote `components/settings/LookupEditor.tsx` from always-editable inputs to read-only table with inline edit mode: bordered table wrapper with rounded corners, gray header row with uppercase labels, alternating row colors (white/`#f8fafc`), hover highlight, `table-layout: fixed` to prevent column shift, pencil/trash icon buttons per row, amber background for editing row with confirm/cancel buttons
 - [x] **Khoa table column widths** — Added `width` property to `Column` interface in LookupEditor; set specific widths for Khoa columns (thứ tự 65px, mã CSKCB 80px, mã khoa XML 95px, tên rút gọn 110px, hiệu lực 95px) so Tên đầy đủ gets remaining space
 - [x] **MergeManager UI redesign** — Rewrote `components/settings/MergeManager.tsx` to match Stitch design: bordered cards with gray header for Khoa đích section, divider line between target and sources, source items as gray rows with trash icons and hover effects, dashed-border dropdown for adding new sources, closeable alerts, indigo Save button with shadow, Lucide icons throughout
+- [x] **Force light-only mode** — Fixed Tailwind v4 auto dark mode by adding `@custom-variant dark (&:where(.dark, .dark *))` to `globals.css` (switches from media-query to class-based, never applied). Also added `className="light"` and `colorScheme: "light"` to `<html>` in `layout.tsx`
 - [x] **ICD Analysis UI fixes** (previous session) — Dropdown overlap fix, legend removal, header row 2 styling with period-based background colors
 
 ### Đã hoàn thành (tổng)

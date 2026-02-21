@@ -2,6 +2,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 
+/* Force light-only: override Tailwind v4 dark variant to use class selector
+   instead of @media (prefers-color-scheme: dark). Since we never add .dark class,
+   all dark: utilities become inert. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    CPBQ React Design System — Tailwind v4
    Light-only, color palette via CSS custom properties

@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" suppressHydrationWarning>
+    <html lang="vi" className="light" style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <PaletteProvider>
           <Sidebar />
