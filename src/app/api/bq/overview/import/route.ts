@@ -43,13 +43,6 @@ export async function POST(request: Request) {
             });
         }
 
-        // Display columns for the preview table
-        const DISPLAY_COLS = [
-            "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh",
-            "dia_chi", "ma_the", "ma_cskcb", "ngay_vao", "ngay_ra",
-            "t_tongchi", "t_bhtt", "nam_qt", "thang_qt",
-        ];
-
         // Process ALL compatible sheets
         const client = getBqClient();
         const sheetsData: {
@@ -83,10 +76,10 @@ export async function POST(request: Request) {
                 // BigQuery unavailable
             }
 
-            // Build display rows with isDuplicate flag
+            // Build display rows with all schema columns + isDuplicate flag
             const displayRows = valid.map((row, idx) => {
                 const display: Record<string, unknown> = { _idx: idx };
-                for (const col of DISPLAY_COLS) {
+                for (const col of SCHEMA_COLS) {
                     display[col] = row[col] ?? null;
                 }
                 display._isDuplicate = dupIndices.has(idx);
@@ -371,12 +364,31 @@ function transformRows(rows: Row[], sourceFileName: string): Row[] {
 function parseDateInt(val: unknown): string | null {
     if (val == null) return null;
     try {
-        const s = String(Math.round(Number(val)));
-        if (s.length !== 8) return null;
-        const y = s.slice(0, 4);
-        const m = s.slice(4, 6);
-        const d = s.slice(6, 8);
-        return `${y}-${m}-${d}`;
+        const raw = String(val).trim();
+
+        // Already ISO format: "YYYY-MM-DD" → pass through
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+        // Integer format: 19770902 → "1977-09-02"
+        const s = String(Math.round(Number(raw)));
+        if (s.length === 8) {
+            const y = s.slice(0, 4);
+            const m = s.slice(4, 6);
+            const d = s.slice(6, 8);
+            return `${y}-${m}-${d}`;
+        }
+
+        // Excel serial date number (e.g. 44927)
+        if (!isNaN(Number(raw)) && Number(raw) > 10000 && Number(raw) < 100000) {
+            const excelEpoch = new Date(1899, 11, 30);
+            const date = new Date(excelEpoch.getTime() + Number(raw) * 86400000);
+            const yy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, "0");
+            const dd = String(date.getDate()).padStart(2, "0");
+            return `${yy}-${mm}-${dd}`;
+        }
+
+        return null;
     } catch {
         return null;
     }
@@ -386,6 +398,13 @@ function parseDatetimeStr(val: unknown): string | null {
     if (val == null) return null;
     try {
         const s = String(val).trim().replace(/^'/, "");
+
+        // Already ISO datetime: "2026-01-02T07:35:00" → pass through
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s;
+
+        // Already ISO date only: "2026-01-02" → append time
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00`;
+
         if (s.length === 12) {
             // YYYYMMDDHHmm
             return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:00`;

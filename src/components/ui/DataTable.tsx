@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 export interface Column {
     key: string;
@@ -39,12 +39,18 @@ export default function DataTable({
 }: DataTableProps) {
     const [pageSize, setPageSize] = useState(initialPageSize);
     const [currentPage, setCurrentPage] = useState(0);
+    const [pageInputValue, setPageInputValue] = useState("1");
 
     const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
 
     // Reset page if out of bounds
     const safePage = Math.min(currentPage, totalPages - 1);
     if (safePage !== currentPage) setCurrentPage(safePage);
+
+    // Keep page input in sync with current page
+    useEffect(() => {
+        setPageInputValue(String(safePage + 1));
+    }, [safePage]);
 
     const startIdx = safePage * pageSize;
     const endIdx = Math.min(startIdx + pageSize, data.length);
@@ -183,7 +189,8 @@ export default function DataTable({
 
             {/* Pagination */}
             <div className="pagination-bar">
-                <div className="pagination-size">
+                <div className="pagination-size" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Hiển thị</span>
                     <select
                         value={pageSize}
                         onChange={(e) =>
@@ -207,8 +214,30 @@ export default function DataTable({
                     >
                         ◀
                     </button>
-                    <span className="pagination-info">
-                        Trang <strong>{safePage + 1}</strong> / {totalPages}
+                    <span className="pagination-info" style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        Trang{" "}
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            className="pagination-page-input"
+                            value={pageInputValue}
+                            onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, "");
+                                setPageInputValue(raw);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    const num = parseInt(pageInputValue, 10);
+                                    if (!isNaN(num)) {
+                                        const clamped = Math.max(1, Math.min(totalPages, num));
+                                        setCurrentPage(clamped - 1);
+                                        setPageInputValue(String(clamped));
+                                    }
+                                }
+                            }}
+                            onBlur={() => setPageInputValue(String(safePage + 1))}
+                        />
+                        {" "}/ {totalPages}
                     </span>
                     <button
                         className="btn btn-secondary btn-sm"

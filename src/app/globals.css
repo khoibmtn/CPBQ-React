@@ -735,6 +735,97 @@ body {
   color: var(--text-muted);
 }
 
+/* ── Column Config Dropdown ──────────────────────────────────────────────── */
+
+.col-config-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.col-config-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.col-config-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0;
+  backdrop-filter: none;
+}
+
+:root[data-theme="dark"] .col-config-dropdown {
+  background-color: #1e293b;
+}
+
+.col-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.col-config-action {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent-light);
+  font-weight: 600;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.col-config-action:hover {
+  background: var(--accent-muted);
+}
+
+.col-config-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.col-config-item:hover {
+  background: var(--sidebar-hover);
+}
+
+.col-config-item input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
 .data-table-empty {
   text-align: center;
   padding: 2rem;
@@ -776,6 +867,26 @@ body {
 
 .pagination-info {
   white-space: nowrap;
+}
+
+.pagination-page-input {
+  width: 32px;
+  text-align: center;
+  padding: 0.15rem 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.pagination-page-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 .pagination-summary {

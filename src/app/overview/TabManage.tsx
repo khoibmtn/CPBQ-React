@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
+import { SCHEMA_COLS } from "@/lib/schema";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import SearchBuilder, { SearchCondition } from "@/components/ui/SearchBuilder";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import * as XLSX from "xlsx";
 
 export default function TabManage() {
     const AUTO_THRESHOLD = 3; // ≤3 years → RAM, >3 → BigQuery
@@ -290,6 +292,58 @@ export default function TabManage() {
         align: col.startsWith("t_") || col === "so_ngay_dtri" ? "right" as const : "left" as const,
     }));
 
+    /* ── Export Excel ── */
+    const handleExportExcel = useCallback(() => {
+        if (displayData.length === 0) return;
+
+        /** Reverse ISO date "YYYY-MM-DD" → integer 19770902 */
+        const dateToInt = (val: unknown): number | unknown => {
+            if (val == null || val === "") return val;
+            const s = String(val).trim();
+            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (m) return Number(`${m[1]}${m[2]}${m[3]}`);
+            return val;
+        };
+
+        /** Reverse ISO datetime "YYYY-MM-DDThh:mm:ss" → "'YYYYMMDDHHmm" */
+        const datetimeToCompact = (val: unknown): string | unknown => {
+            if (val == null || val === "") return val;
+            const s = String(val).trim();
+            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+            if (m) return `'${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`;
+            return val;
+        };
+
+        const DATE_INT_COLS = new Set(["ngay_sinh", "gt_the_tu", "gt_the_den"]);
+        const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
+
+        // Unwrap BQ objects, enforce SCHEMA_COLS order, reverse-transform dates
+        const exportData = displayData.map((row) => {
+            const out: Record<string, unknown> = {};
+            for (const col of SCHEMA_COLS) {
+                let val = row[col];
+                // Unwrap BigQuery wrapper objects
+                if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
+                    val = (val as Record<string, unknown>).value;
+                }
+                // Reverse-transform dates to original format
+                if (DATE_INT_COLS.has(col)) {
+                    val = dateToInt(val);
+                } else if (DATETIME_COLS.has(col)) {
+                    val = datetimeToCompact(val);
+                }
+                out[col] = val ?? "";
+            }
+            return out;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Data");
+        const fileName = `BHYT_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }, [displayData, fromYear, toYear]);
+
     /* ── Metrics ── */
     const nMonths = actualMethod === "RAM" && data && data.length > 0
         ? new Set(data.map((r) => `${r.nam_qt}-${r.thang_qt}`)).size
@@ -410,7 +464,17 @@ export default function TabManage() {
                     <hr className="divider" />
 
                     {/* Search */}
-                    <SectionTitle icon="🔍">Dữ liệu chi tiết</SectionTitle>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <SectionTitle icon="🔍">Dữ liệu chi tiết</SectionTitle>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={handleExportExcel}
+                            disabled={displayData.length === 0}
+                            style={{ whiteSpace: "nowrap" }}
+                        >
+                            📥 Tải Excel ({displayData.length.toLocaleString()})
+                        </button>
+                    </div>
 
                     <SearchBuilder
                         columns={columns}

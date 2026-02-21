@@ -10,11 +10,18 @@
 
 ## Trạng thái hiện tại — 2026-02-21
 
-### Latest Version
-- **Tag**: `v20260221-0031-import-redesign`
-- **Commit**: `39d8a9b` on `main`
+### Latest Session (2026-02-21 11:35)
 
-### Đã hoàn thành
+#### Tasks Completed
+- [x] **Excel Export date format fix** — Reverse-transform ISO dates back to original compact format in export (`1977-09-02` → `19770902`, `2026-01-02T07:35:00` → `'202601020735`)
+- [x] **Import date parsing fix** — Updated `parseDateInt` and `parseDatetimeStr` to accept ISO-formatted dates/datetimes, enabling re-import of exported files
+- [x] **Per-sheet state persistence** — Upload/overwrite status (`doneRows`, `doneMode`, `checkedRows`, `removedRows`) now persists across sheet switches via ref Maps
+- [x] **Per-sheet+tab upload messages** — `uploadMsg` changed to Map keyed by `sheetName:tab`, messages only show in relevant tab and persist across tab/sheet switches
+- [x] **Import preview all columns** — Changed from 14 hardcoded `DISPLAY_COLS` to full `SCHEMA_COLS` so all columns (e.g., `ma_loaikcb`) have data
+- [x] **Column visibility menu improvements** — Opaque background (was semi-transparent), `colMode` toggle (`Tất cả` / `Tùy chỉnh`), localStorage persistence across sessions
+- [x] **Workflow rewrite** — Updated `/load-context`, `/sync`, `/save-context` for CPBQ-React (Next.js, branching, deploy)
+
+### Đã hoàn thành (tổng)
 - [x] Khởi tạo dự án Next.js (App Router, TypeScript)
 - [x] Design system CSS (dark/light theme, Inter font)
 - [x] Layout: Sidebar navigation, ThemeProvider
@@ -22,20 +29,20 @@
 - [x] **Trang Số liệu tổng hợp** (hospital-stats) — multi-period comparison
 - [x] **Trang Quản lý số liệu** (overview) — 3 tab: Pivot, Manage, Import
   - [x] TabPivot: pivot summary display
-  - [x] TabManage: multi-condition search, row select/delete with confirmation
-  - [x] TabImport: **Redesigned** — row-level data, sheet selector, valid/duplicate tabs, search, checkboxes, post-upload tracking
+  - [x] TabManage: multi-condition search, row select/delete, Excel export (schema-ordered, original date format)
+  - [x] TabImport: row-level data, sheet selector, summary/valid/duplicate tabs, column toggle with localStorage, per-sheet state persistence
 - [x] **Trang Chi phí theo khoa** (cost-by-dept) — multi-period comparison, khoa merge, profile columns
 - [x] **Trang Chi phí theo mã bệnh** (icd-analysis) — ICD-3 analysis, cumulative %, filters
 - [x] **Trang Cấu hình** (settings) — lookup CRUD, profile management, khoa merge groups
 
-### Import Tab — Chi tiết kỹ thuật (mới nhất)
-- **Backend POST** `/api/bq/overview/import`: Trả row-level data cho tất cả sheet, mỗi dòng có `_isDuplicate` flag
+### Import Tab — Chi tiết kỹ thuật
+- **Backend POST** `/api/bq/overview/import`: Trả row-level data cho tất cả sheet (full SCHEMA_COLS), mỗi dòng có `_isDuplicate` flag
 - **Backend PUT**: `mode=new` (insert dòng mới) / `mode=overwrite` (DELETE bản cũ theo composite key + INSERT mới)
-- **Composite key**: `ma_cskcb + ma_bn + ma_loaikcb + ngay_vao + ngay_ra`
-- **Frontend state**: `doneRows` (Set) + `doneMode` (map) tracking sau upload
-- **DataTable**: `disabledRows` prop, `rowClassName` callback, Select All skips disabled
-- **Status column**: `Chưa tải lên` → `✅ Đã tải lên` / `✅ Đã ghi đè`
-- **CSS**: `.btn-warning` (amber gradient), `.row-done` (green bg, muted text)
+- **Date parsing**: `parseDateInt` accepts integer `19770902` + ISO `1977-09-02` + Excel serial; `parseDatetimeStr` accepts compact `YYYYMMDDHHmm` + ISO `YYYY-MM-DDThh:mm:ss`
+- **Per-sheet state**: `sheetDoneRows/sheetDoneMode/sheetCheckedRows/sheetRemovedRows` ref Maps persist across sheet switches
+- **Upload messages**: Map<`sheetName:tab`, message> — scoped per sheet+tab
+- **Column visibility**: `colMode` (`all`/`custom`), saved to `localStorage('import_visible_cols')`
+- **Export**: Reverse-transforms dates to original format before writing Excel
 
 ## Cấu trúc file chính
 
@@ -47,23 +54,28 @@ src/
 │   ├── overview/
 │   │   ├── page.tsx                     ✅
 │   │   ├── TabPivot.tsx                 ✅
-│   │   ├── TabManage.tsx                ✅
-│   │   └── TabImport.tsx                ✅ (redesigned)
+│   │   ├── TabManage.tsx                ✅ (Excel export with date reverse-transform)
+│   │   └── TabImport.tsx                ✅ (per-sheet state, col mode, scoped messages)
 │   ├── cost-by-dept/page.tsx            ✅
 │   ├── icd-analysis/page.tsx            ✅
 │   ├── settings/page.tsx                ✅
 │   └── api/bq/
 │       ├── hospital-stats/route.ts
-│       ├── overview/import/route.ts     ✅ (row-level + overwrite)
+│       ├── overview/import/route.ts     ✅ (ISO date parsing, full SCHEMA_COLS preview)
 │       ├── overview/manage/route.ts
 │       └── ...
 ├── components/ui/
-│   ├── DataTable.tsx                    ✅ (disabledRows, rowClassName)
+│   ├── DataTable.tsx                    ✅ (disabledRows, rowClassName, pagination input)
 │   ├── SearchBuilder.tsx
 │   └── ...
 └── lib/
     ├── config.ts, bigquery.ts, formatters.ts, schema.ts
 ```
+
+## Workflows
+- `/load-context`: Load context + skills/rules/workflows + tạo nhánh dev + dev server
+- `/sync`: Commit WIP → merge main → push (deploy) → tag → quay lại nhánh dev
+- `/save-context`: Save context + commit + merge main → push (deploy) → tag → cleanup
 
 ## Lệnh chạy
 - Dev server: `npm run dev`

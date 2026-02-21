@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
+import { SCHEMA_COLS } from "@/lib/schema";
 
 /* ── Types ── */
 
@@ -18,21 +19,68 @@ interface SheetData {
     summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
 }
 
-type TabFilter = "valid" | "duplicate";
+type TabFilter = "summary" | "valid" | "duplicate";
 
-const DISPLAY_COLS: Column[] = [
-    { key: "stt", label: "STT", align: "center", width: 60 },
-    { key: "ma_bn", label: "Mã BN" },
-    { key: "ho_ten", label: "Họ tên" },
-    { key: "ngay_sinh", label: "Ngày sinh", align: "center" },
-    { key: "gioi_tinh", label: "GT", align: "center", width: 40 },
-    { key: "ma_cskcb", label: "CSKCB", align: "center" },
-    { key: "ngay_vao", label: "Ngày vào", align: "center" },
-    { key: "ngay_ra", label: "Ngày ra", align: "center" },
-    { key: "t_tongchi", label: "Tổng chi", align: "right" },
-    { key: "t_bhtt", label: "BH thanh toán", align: "right" },
+/* ── Column config ── */
+
+/** Human-readable labels for BQ columns */
+const COL_LABELS: Record<string, string> = {
+    stt: "STT", ma_bn: "Mã BN", ho_ten: "Họ tên", ngay_sinh: "Ngày sinh",
+    gioi_tinh: "Giới tính", dia_chi: "Địa chỉ", ma_the: "Mã thẻ",
+    ma_dkbd: "Mã ĐKBD", gt_the_tu: "GT thẻ từ", gt_the_den: "GT thẻ đến",
+    ma_benh: "Mã bệnh", ma_benhkhac: "Mã bệnh khác",
+    ma_lydo_vvien: "Lý do VV", ma_noi_chuyen: "Nơi chuyển",
+    ngay_vao: "Ngày vào", ngay_ra: "Ngày ra", so_ngay_dtri: "Số ngày ĐT",
+    ket_qua_dtri: "Kết quả ĐT", tinh_trang_rv: "Tình trạng RV",
+    t_tongchi: "Tổng chi", t_xn: "Xét nghiệm", t_cdha: "CĐHA",
+    t_thuoc: "Thuốc", t_mau: "Máu", t_pttt: "PTTT", t_vtyt: "VTYT",
+    t_dvkt_tyle: "DVKT tỷ lệ", t_thuoc_tyle: "Thuốc tỷ lệ",
+    t_vtyt_tyle: "VTYT tỷ lệ", t_kham: "Khám", t_giuong: "Giường",
+    t_vchuyen: "Vận chuyển", t_bntt: "BN thanh toán", t_bhtt: "BH thanh toán",
+    t_ngoaids: "Ngoài DS", ma_khoa: "Mã khoa", nam_qt: "Năm QT",
+    thang_qt: "Tháng QT", ma_khuvuc: "Mã khu vực", ma_loaikcb: "Loại KCB",
+    ma_cskcb: "Mã CSKCB", noi_ttoan: "Nơi thanh toán", giam_dinh: "Giám định",
+    t_xuattoan: "Xuất toán", t_nguonkhac: "Nguồn khác",
+    t_datuyen: "Đa tuyến", t_vuottran: "Vượt trần",
+    _status: "Trạng thái",
+};
+
+/** Money / amount columns → align right */
+const RIGHT_ALIGN_COLS = new Set([
+    "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
+    "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
+    "t_vchuyen", "t_bntt", "t_bhtt", "t_ngoaids", "t_xuattoan", "t_nguonkhac",
+    "t_datuyen", "t_vuottran", "so_ngay_dtri",
+]);
+
+/** Center-aligned columns */
+const CENTER_ALIGN_COLS = new Set([
+    "stt", "ngay_sinh", "gioi_tinh", "ngay_vao", "ngay_ra", "ma_cskcb",
+    "ma_dkbd", "ma_khoa", "ma_loaikcb", "ma_khuvuc", "nam_qt", "thang_qt",
+    "ket_qua_dtri", "tinh_trang_rv", "ma_lydo_vvien", "noi_ttoan",
+    "giam_dinh", "_status",
+]);
+
+/** Build full column list from schema + status column */
+const ALL_COLS: Column[] = [
+    ...SCHEMA_COLS.map((key) => ({
+        key,
+        label: COL_LABELS[key] || key,
+        align: (RIGHT_ALIGN_COLS.has(key) ? "right" : CENTER_ALIGN_COLS.has(key) ? "center" : "left") as "left" | "center" | "right",
+        ...(key === "stt" ? { width: 60 } : {}),
+        ...(key === "gioi_tinh" ? { width: 40 } : {}),
+    })),
     { key: "_status", label: "Trạng thái", align: "center", width: 80 },
 ];
+
+/** Columns always visible and non-toggleable */
+const PINNED_KEYS = new Set(["stt", "_status"]);
+
+/** Default visible columns (compact view) */
+const DEFAULT_VISIBLE_KEYS = new Set([
+    "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh", "ma_cskcb",
+    "ngay_vao", "ngay_ra", "t_tongchi", "t_bhtt", "_status",
+]);
 
 export default function TabImport() {
     const [file, setFile] = useState<File | null>(null);
@@ -44,11 +92,59 @@ export default function TabImport() {
     const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
     const [removedRows, setRemovedRows] = useState<Set<number>>(new Set());
     const [searchKeyword, setSearchKeyword] = useState("");
-    const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+    // Per sheet+tab upload messages: key = "sheetName:valid" or "sheetName:duplicate"
+    const [uploadMsgs, setUploadMsgs] = useState<Map<string, string>>(new Map());
     // Tracks rows that have been successfully uploaded/overwritten (by original index)
     const [doneRows, setDoneRows] = useState<Set<number>>(new Set());
     const [doneMode, setDoneMode] = useState<Record<number, "new" | "overwrite">>({});
+    // Per-sheet state caches (survive sheet switches)
+    const sheetDoneRows = useRef<Map<string, Set<number>>>(new Map());
+    const sheetDoneMode = useRef<Map<string, Record<number, "new" | "overwrite">>>(new Map());
+    const sheetCheckedRows = useRef<Map<string, Set<number>>>(new Map());
+    const sheetRemovedRows = useRef<Map<string, Set<number>>>(new Map());
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const colMenuRef = useRef<HTMLDivElement>(null);
+    const LS_KEY = "import_visible_cols";
+    const [colMode, setColMode] = useState<"all" | "custom">(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem(LS_KEY) ? "custom" : "all";
+        }
+        return "all";
+    });
+    const [visibleCols, setVisibleCols] = useState<Set<string>>(() => {
+        if (typeof window !== "undefined") {
+            try {
+                const saved = localStorage.getItem(LS_KEY);
+                if (saved) return new Set(JSON.parse(saved) as string[]);
+            } catch { /* ignore */ }
+        }
+        return new Set(ALL_COLS.map((c) => c.key));
+    });
+    const [showColMenu, setShowColMenu] = useState(false);
+
+    // Close column menu on outside click
+    useEffect(() => {
+        if (!showColMenu) return;
+        const handler = (e: MouseEvent) => {
+            if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+                setShowColMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showColMenu]);
+
+    const toggleCol = useCallback((key: string) => {
+        setVisibleCols((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            // Auto-save and switch to custom mode on individual toggle
+            try { localStorage.setItem(LS_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+            return next;
+        });
+        setColMode("custom");
+    }, []);
 
     /* ── File handling ── */
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,12 +152,17 @@ export default function TabImport() {
         if (f) {
             setFile(f);
             setSheets([]);
-            setUploadMsg(null);
+            setUploadMsgs(new Map());
             setError(null);
             setCheckedRows(new Set());
             setRemovedRows(new Set());
             setDoneRows(new Set());
             setDoneMode({});
+            // Clear per-sheet caches
+            sheetDoneRows.current.clear();
+            sheetDoneMode.current.clear();
+            sheetCheckedRows.current.clear();
+            sheetRemovedRows.current.clear();
         }
     };
 
@@ -71,12 +172,17 @@ export default function TabImport() {
         if (f && (f.name.endsWith(".xlsx") || f.name.endsWith(".xls"))) {
             setFile(f);
             setSheets([]);
-            setUploadMsg(null);
+            setUploadMsgs(new Map());
             setError(null);
             setCheckedRows(new Set());
             setRemovedRows(new Set());
             setDoneRows(new Set());
             setDoneMode({});
+            // Clear per-sheet caches
+            sheetDoneRows.current.clear();
+            sheetDoneMode.current.clear();
+            sheetCheckedRows.current.clear();
+            sheetRemovedRows.current.clear();
         }
     };
 
@@ -101,7 +207,7 @@ export default function TabImport() {
             setSheets(sheetsData);
             if (sheetsData.length > 0) {
                 setSelectedSheet(sheetsData[0].sheetName);
-                setSelectedTab("valid");
+                setSelectedTab("summary");
                 // Auto-check all valid (non-duplicate) rows
                 const firstSheet = sheetsData[0];
                 const validIndices = new Set<number>();
@@ -182,9 +288,11 @@ export default function TabImport() {
             });
 
             if (d.mode === "overwrite") {
-                setUploadMsg(`✅ Đã ghi đè ${d.uploaded?.toLocaleString() || 0} dòng (xóa ${d.deleted?.toLocaleString() || 0} bản ghi cũ).`);
+                const msgKey = `${selectedSheet}:${selectedTab}`;
+                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã ghi đè ${d.uploaded?.toLocaleString() || 0} dòng (xóa ${d.deleted?.toLocaleString() || 0} bản ghi cũ).`));
             } else {
-                setUploadMsg(`✅ Đã tải lên ${d.uploaded?.toLocaleString() || 0} dòng mới thành công!`);
+                const msgKey = `${selectedSheet}:${selectedTab}`;
+                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã tải lên ${d.uploaded?.toLocaleString() || 0} dòng mới thành công!`));
             }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");
@@ -193,34 +301,68 @@ export default function TabImport() {
         }
     };
 
-    /* ── Delete selected rows (local only) ── */
+    /* ── Delete selected rows (local only — scoped to current tab) ── */
     const handleLocalDelete = () => {
+        const currentTabOrigIndices = new Set(
+            filteredRows.map((r) => r._displayIdx as number)
+        );
         setRemovedRows((prev) => {
             const next = new Set(prev);
-            checkedRows.forEach((i) => next.add(i));
+            checkedRows.forEach((i) => {
+                if (currentTabOrigIndices.has(i)) next.add(i);
+            });
             return next;
         });
-        setCheckedRows(new Set());
+        // Only uncheck rows in current tab
+        setCheckedRows((prev) => {
+            const next = new Set(prev);
+            currentTabOrigIndices.forEach((i) => next.delete(i));
+            return next;
+        });
     };
 
     /* ── Switch sheet ── */
     const handleSheetChange = (name: string) => {
+        // Save current sheet state before switching
+        if (selectedSheet) {
+            sheetDoneRows.current.set(selectedSheet, new Set(doneRows));
+            sheetDoneMode.current.set(selectedSheet, { ...doneMode });
+            sheetCheckedRows.current.set(selectedSheet, new Set(checkedRows));
+            sheetRemovedRows.current.set(selectedSheet, new Set(removedRows));
+        }
+
         setSelectedSheet(name);
-        setSelectedTab("valid");
-        setCheckedRows(new Set());
-        setRemovedRows(new Set());
-        setDoneRows(new Set());
-        setDoneMode({});
+        setSelectedTab("summary");
         setSearchKeyword("");
-        setUploadMsg(null);
-        // Auto-check all valid rows of new sheet
-        const sheet = sheets.find((s) => s.sheetName === name);
-        if (sheet) {
-            const validIndices = new Set<number>();
-            sheet.validRows.forEach((row, i) => {
-                if (!row._isDuplicate) validIndices.add(i);
-            });
-            setCheckedRows(validIndices);
+        // uploadMsgs intentionally NOT cleared on sheet switch — persists per sheet+tab
+
+        // Restore saved state for target sheet, or initialize defaults
+        const savedDone = sheetDoneRows.current.get(name);
+        const savedMode = sheetDoneMode.current.get(name);
+        const savedChecked = sheetCheckedRows.current.get(name);
+        const savedRemoved = sheetRemovedRows.current.get(name);
+
+        if (savedDone && savedDone.size > 0) {
+            // Restore previously saved state
+            setDoneRows(savedDone);
+            setDoneMode(savedMode || {});
+            setCheckedRows(savedChecked || new Set());
+            setRemovedRows(savedRemoved || new Set());
+        } else {
+            // First visit — auto-check all valid (non-duplicate) rows
+            setDoneRows(new Set());
+            setDoneMode({});
+            setRemovedRows(new Set());
+            const sheet = sheets.find((s) => s.sheetName === name);
+            if (sheet) {
+                const validIndices = new Set<number>();
+                sheet.validRows.forEach((row, i) => {
+                    if (!row._isDuplicate) validIndices.add(i);
+                });
+                setCheckedRows(validIndices);
+            } else {
+                setCheckedRows(new Set());
+            }
         }
     };
 
@@ -305,6 +447,18 @@ export default function TabImport() {
         return set;
     }, [filteredRows, doneRows]);
 
+    // Columns filtered by visibility setting
+    const displayColumns = useMemo(
+        () => ALL_COLS.filter((c) => PINNED_KEYS.has(c.key) || visibleCols.has(c.key)),
+        [visibleCols]
+    );
+
+    // Count checked rows in current tab only (for delete button)
+    const checkedInCurrentTab = useMemo(() => {
+        const currentOrigIndices = new Set(filteredRows.map((r) => r._displayIdx as number));
+        return [...checkedRows].filter((i) => currentOrigIndices.has(i) && !doneRows.has(i)).length;
+    }, [filteredRows, checkedRows, doneRows]);
+
     // Row className for done rows (green background)
     const getRowClassName = (displayIdx: number): string => {
         const origIdx = selectionAdapter.get(displayIdx);
@@ -332,7 +486,7 @@ export default function TabImport() {
     const handleReset = () => {
         setFile(null);
         setSheets([]);
-        setUploadMsg(null);
+        setUploadMsgs(new Map());
         setError(null);
         setCheckedRows(new Set());
         setRemovedRows(new Set());
@@ -500,37 +654,6 @@ export default function TabImport() {
                         )}
                     </div>
 
-                    {/* Summary table */}
-                    {currentSheet && currentSheet.summary.length > 0 && (
-                        <>
-                            <SectionTitle icon="📖">Tóm tắt dữ liệu</SectionTitle>
-                            <div className="data-table-wrapper" style={{ marginBottom: "1rem" }}>
-                                <table className="data-table data-table-compact">
-                                    <thead>
-                                        <tr>
-                                            <th style={{ textAlign: "center" }}>Kỳ</th>
-                                            <th style={{ textAlign: "center" }}>Mã CSKCB</th>
-                                            <th style={{ textAlign: "right" }}>Số dòng</th>
-                                            <th style={{ textAlign: "right" }}>Tổng chi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {currentSheet.summary.map((s, i) => (
-                                            <tr key={i} className={i % 2 === 0 ? "row-even" : "row-odd"}>
-                                                <td style={{ textAlign: "center" }}>{s.period}</td>
-                                                <td style={{ textAlign: "center" }}>{s.maCSKCB}</td>
-                                                <td className="right">{s.rows.toLocaleString()}</td>
-                                                <td className="right">{s.tongChi}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    )}
-
-                    <hr className="divider" />
-
                     {/* Tabs: underlined tab navigation */}
                     <div style={{
                         display: "flex",
@@ -539,6 +662,22 @@ export default function TabImport() {
                         borderBottom: "2px solid var(--border)",
                         marginBottom: "0.75rem",
                     }}>
+                        <button
+                            onClick={() => setSelectedTab("summary")}
+                            style={{
+                                background: "none",
+                                border: "none",
+                                padding: "0.5rem 0",
+                                cursor: "pointer",
+                                fontWeight: selectedTab === "summary" ? 700 : 400,
+                                color: selectedTab === "summary" ? "var(--accent)" : "var(--text-muted)",
+                                borderBottom: selectedTab === "summary" ? "2px solid var(--accent)" : "2px solid transparent",
+                                marginBottom: "-2px",
+                                fontSize: "0.95rem",
+                            }}
+                        >
+                            📖 Tóm tắt
+                        </button>
                         <button
                             onClick={() => setSelectedTab("valid")}
                             style={{
@@ -572,99 +711,193 @@ export default function TabImport() {
                             📋 Trùng lặp ({dupCount})
                         </button>
 
-                        {/* Search + Delete */}
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <input
-                                type="search"
-                                className="form-input"
-                                placeholder="🔍 Tìm kiếm bản ghi..."
-                                value={searchKeyword}
-                                onChange={(e) => setSearchKeyword(e.target.value)}
-                                style={{ maxWidth: 240, height: 36 }}
-                            />
-                            {checkedRows.size > 0 && (
-                                <button
-                                    className="btn btn-danger btn-sm"
-                                    onClick={handleLocalDelete}
-                                    style={{ whiteSpace: "nowrap", height: 36 }}
-                                >
-                                    🗑️ Xóa ({checkedRows.size})
-                                </button>
-                            )}
-                        </div>
+                        {/* Search + Column Config + Delete — only for data tabs */}
+                        {selectedTab !== "summary" && (
+                            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <input
+                                    type="search"
+                                    className="form-input"
+                                    placeholder="🔍 Tìm kiếm bản ghi..."
+                                    value={searchKeyword}
+                                    onChange={(e) => setSearchKeyword(e.target.value)}
+                                    style={{ maxWidth: 240, height: 36 }}
+                                />
+
+                                {/* Column visibility config */}
+                                <div ref={colMenuRef} style={{ position: "relative" }}>
+                                    <button
+                                        className="col-config-btn"
+                                        onClick={() => setShowColMenu((v) => !v)}
+                                        title="Cấu hình cột hiển thị"
+                                    >
+                                        ⚙️
+                                    </button>
+                                    {showColMenu && (
+                                        <div className="col-config-dropdown">
+                                            <div className="col-config-header">
+                                                <span>Hiển thị cột</span>
+                                                <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem" }}>
+                                                    <button
+                                                        className="col-config-action"
+                                                        style={{ fontWeight: colMode === "all" ? 700 : 400 }}
+                                                        onClick={() => {
+                                                            setVisibleCols(new Set(ALL_COLS.map((c) => c.key)));
+                                                            setColMode("all");
+                                                        }}
+                                                    >
+                                                        {colMode === "all" ? "✓ " : ""}Tất cả
+                                                    </button>
+                                                    <button
+                                                        className="col-config-action"
+                                                        style={{ fontWeight: colMode === "custom" ? 700 : 400 }}
+                                                        onClick={() => {
+                                                            // Load saved custom selection
+                                                            try {
+                                                                const saved = localStorage.getItem(LS_KEY);
+                                                                if (saved) {
+                                                                    setVisibleCols(new Set(JSON.parse(saved) as string[]));
+                                                                } else {
+                                                                    setVisibleCols(new Set(DEFAULT_VISIBLE_KEYS));
+                                                                }
+                                                            } catch {
+                                                                setVisibleCols(new Set(DEFAULT_VISIBLE_KEYS));
+                                                            }
+                                                            setColMode("custom");
+                                                        }}
+                                                    >
+                                                        {colMode === "custom" ? "✓ " : ""}Tùy chỉnh
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {ALL_COLS.filter((c) => !PINNED_KEYS.has(c.key)).map((col) => (
+                                                <label key={col.key} className="col-config-item">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={visibleCols.has(col.key)}
+                                                        onChange={() => toggleCol(col.key)}
+                                                    />
+                                                    {col.label}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {checkedInCurrentTab > 0 && (
+                                    <button
+                                        className="btn btn-danger btn-sm"
+                                        onClick={handleLocalDelete}
+                                        style={{ whiteSpace: "nowrap", height: 36 }}
+                                    >
+                                        🗑️ Xóa ({checkedInCurrentTab})
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Data table */}
-                    <DataTable
-                        columns={DISPLAY_COLS}
-                        data={filteredRows}
-                        selectable
-                        selectedRows={displaySelectedRows}
-                        disabledRows={displayDisabledRows}
-                        onSelectionChange={handleSelectionChange}
-                        stickyHeader
-                        rowClassName={getRowClassName}
-                    />
-
-                    {/* Inline success message */}
-                    {uploadMsg && (
-                        <div style={{
-                            marginTop: "0.75rem",
-                            padding: "0.5rem 1rem",
-                            background: "var(--success-bg, rgba(34,197,94,0.08))",
-                            border: "1px solid var(--success, #22c55e)",
-                            borderRadius: 8,
-                            color: "var(--success, #22c55e)",
-                            fontWeight: 600,
-                            fontSize: "0.9rem",
-                            textAlign: "center",
-                        }}>
-                            {uploadMsg}
+                    {/* ── Tab content: Summary ── */}
+                    {selectedTab === "summary" && currentSheet && currentSheet.summary.length > 0 && (
+                        <div className="data-table-wrapper" style={{ marginBottom: "1rem" }}>
+                            <table className="data-table data-table-compact">
+                                <thead>
+                                    <tr>
+                                        <th style={{ textAlign: "center" }}>Kỳ</th>
+                                        <th style={{ textAlign: "center" }}>Mã CSKCB</th>
+                                        <th style={{ textAlign: "right" }}>Số dòng</th>
+                                        <th style={{ textAlign: "right" }}>Tổng chi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {currentSheet.summary.map((s, i) => (
+                                        <tr key={i} className={i % 2 === 0 ? "row-even" : "row-odd"}>
+                                            <td style={{ textAlign: "center" }}>{s.period}</td>
+                                            <td style={{ textAlign: "center" }}>{s.maCSKCB}</td>
+                                            <td className="right">{s.rows.toLocaleString()}</td>
+                                            <td className="right">{s.tongChi}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
+                    {selectedTab === "summary" && currentSheet && currentSheet.summary.length === 0 && (
+                        <div className="data-table-empty"><p>Không có dữ liệu tóm tắt</p></div>
+                    )}
 
-                    {/* Action buttons: tab-conditional */}
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            gap: "0.75rem",
-                            marginTop: "1rem",
-                        }}
-                    >
-                        {/* Ghi đè: only on duplicate tab */}
-                        {selectedTab === "duplicate" && dupCount > 0 && (
-                            <button
-                                className="btn btn-warning"
-                                onClick={() => handleUpload("overwrite")}
-                                disabled={loading || checkedDupCount === 0}
-                                style={{ height: 44 }}
-                            >
-                                {loading ? (
-                                    <><span className="spinner" /> Đang ghi đè...</>
-                                ) : (
-                                    `🔄 Xác nhận ghi đè (${checkedDupCount})`
-                                )}
-                            </button>
-                        )}
+                    {/* ── Tab content: Data tables (valid / duplicate) ── */}
+                    {selectedTab !== "summary" && (
+                        <>
+                            <DataTable
+                                columns={displayColumns}
+                                data={filteredRows}
+                                selectable
+                                selectedRows={displaySelectedRows}
+                                disabledRows={displayDisabledRows}
+                                onSelectionChange={handleSelectionChange}
+                                stickyHeader
+                                rowClassName={getRowClassName}
+                            />
 
-                        {/* Tải lên mới: only on valid tab */}
-                        {selectedTab === "valid" && (
-                            <button
-                                className="btn btn-primary"
-                                onClick={() => handleUpload("new")}
-                                disabled={loading || checkedNewCount === 0}
-                                style={{ height: 44 }}
+                            {/* Inline success message */}
+                            {uploadMsgs.get(`${selectedSheet}:${selectedTab}`) && (
+                                <div style={{
+                                    marginTop: "0.75rem",
+                                    padding: "0.5rem 1rem",
+                                    background: "var(--success-bg, rgba(34,197,94,0.08))",
+                                    border: "1px solid var(--success, #22c55e)",
+                                    borderRadius: 8,
+                                    color: "var(--success, #22c55e)",
+                                    fontWeight: 600,
+                                    fontSize: "0.9rem",
+                                    textAlign: "center",
+                                }}>
+                                    {uploadMsgs.get(`${selectedSheet}:${selectedTab}`)}
+                                </div>
+                            )}
+
+                            {/* Action buttons: tab-conditional */}
+                            <div
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    gap: "0.75rem",
+                                    marginTop: "1rem",
+                                }}
                             >
-                                {loading ? (
-                                    <><span className="spinner" /> Đang tải lên...</>
-                                ) : (
-                                    `☁️ Tải lên mới (${checkedNewCount})`
+                                {selectedTab === "duplicate" && dupCount > 0 && (
+                                    <button
+                                        className="btn btn-warning"
+                                        onClick={() => handleUpload("overwrite")}
+                                        disabled={loading || checkedDupCount === 0}
+                                        style={{ height: 44 }}
+                                    >
+                                        {loading ? (
+                                            <><span className="spinner" /> Đang ghi đè...</>
+                                        ) : (
+                                            `🔄 Xác nhận ghi đè (${checkedDupCount})`
+                                        )}
+                                    </button>
                                 )}
-                            </button>
-                        )}
-                    </div>
+
+                                {selectedTab === "valid" && (
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => handleUpload("new")}
+                                        disabled={loading || checkedNewCount === 0}
+                                        style={{ height: 44 }}
+                                    >
+                                        {loading ? (
+                                            <><span className="spinner" /> Đang tải lên...</>
+                                        ) : (
+                                            `☁️ Tải lên mới (${checkedNewCount})`
+                                        )}
+                                    </button>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </div>
