@@ -1,5 +1,5 @@
 "use client";
-
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Save } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
 /* ── All metric keys (same as settings.py) ─────────────────────────────── */
@@ -63,7 +63,6 @@ export default function ProfileManager() {
     const [newName, setNewName] = useState("");
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-    /* ── Load profile names ── */
     const loadNames = useCallback(async () => {
         try {
             const res = await fetch("/api/bq/profiles");
@@ -77,15 +76,12 @@ export default function ProfileManager() {
         }
     }, []);
 
-    /* ── Load profile data ── */
     const loadProfile = useCallback(async (name: string) => {
         try {
             const res = await fetch(`/api/bq/profiles?name=${encodeURIComponent(name)}`);
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             let loaded: MetricItem[] = data.items || [];
-
-            // Ensure all metrics present
             const existing = new Set(loaded.map((it) => it.metric_key));
             let maxThuTu = Math.max(0, ...loaded.map((it) => it.thu_tu || 0));
             for (const [key] of ALL_METRIC_KEYS) {
@@ -94,15 +90,12 @@ export default function ProfileManager() {
                     loaded.push({ metric_key: key, thu_tu: maxThuTu, visible: false });
                 }
             }
-
-            // Deduplicate
             const seen = new Set<string>();
             loaded = loaded.filter((it) => {
                 if (seen.has(it.metric_key)) return false;
                 seen.add(it.metric_key);
                 return true;
             });
-
             setItems(loaded);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi tải profile");
@@ -122,7 +115,6 @@ export default function ProfileManager() {
         })();
     }, [loadNames, loadProfile]);
 
-    /* ── Handlers ── */
     const handleSelectProfile = async (name: string) => {
         setSelected(name);
         setConfirmDelete(null);
@@ -151,7 +143,7 @@ export default function ProfileManager() {
             await loadNames();
             setSelected(name);
             setItems(defaultItems);
-            setSuccess(`✅ Đã tạo profile "${name}"!`);
+            setSuccess(`Đã tạo profile "${name}"!`);
             setTimeout(() => setSuccess(null), 3000);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi tạo profile");
@@ -178,7 +170,7 @@ export default function ProfileManager() {
                 setSelected(null);
                 setItems([]);
             }
-            setSuccess("✅ Đã xóa profile!");
+            setSuccess("Đã xóa profile!");
             setTimeout(() => setSuccess(null), 3000);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi xóa profile");
@@ -192,13 +184,11 @@ export default function ProfileManager() {
         setSaving(true);
         setError(null);
         try {
-            // Sort: checked by thu_tu, unchecked by default order
             const checked = items.filter((it) => it.visible).sort((a, b) => a.thu_tu - b.thu_tu);
             const unchecked = items
                 .filter((it) => !it.visible)
                 .sort((a, b) => (DEFAULT_ORDER[a.metric_key] ?? 999) - (DEFAULT_ORDER[b.metric_key] ?? 999));
             const ordered = [...checked, ...unchecked].map((it, i) => ({ ...it, thu_tu: i + 1 }));
-
             const res = await fetch("/api/bq/profiles", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -207,7 +197,7 @@ export default function ProfileManager() {
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             setItems(ordered);
-            setSuccess(`✅ Đã lưu profile "${selected}"!`);
+            setSuccess(`Đã lưu profile "${selected}"!`);
             setTimeout(() => setSuccess(null), 3000);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Lỗi lưu profile");
@@ -241,7 +231,6 @@ export default function ProfileManager() {
         const checked = items.filter((it) => it.visible).sort((a, b) => a.thu_tu - b.thu_tu);
         const idx = checked.findIndex((it) => it.metric_key === key);
         if (idx <= 0) return;
-        // Swap thu_tu
         const curTt = checked[idx].thu_tu;
         const prevTt = checked[idx - 1].thu_tu;
         setItems((prev) =>
@@ -269,164 +258,236 @@ export default function ProfileManager() {
     };
 
     if (loading) {
-        return <div className="loading-overlay"><div className="spinner" /> Đang tải profiles...</div>;
+        return (
+            <div className="flex items-center gap-2 justify-center py-12 text-gray-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải profiles...
+            </div>
+        );
     }
 
-    // Build display list: checked first (by thu_tu), then unchecked (by default order)
     const checked = items.filter((it) => it.visible).sort((a, b) => a.thu_tu - b.thu_tu);
     const unchecked = items
         .filter((it) => !it.visible)
         .sort((a, b) => (DEFAULT_ORDER[a.metric_key] ?? 999) - (DEFAULT_ORDER[b.metric_key] ?? 999));
-    const displayItems = [...checked, ...unchecked];
     const visibleCount = checked.length;
     const allChecked = items.length > 0 && items.every((it) => it.visible);
 
     return (
-        <div>
-            {error && <div className="info-banner error" style={{ marginBottom: "0.75rem" }}>❌ {error}</div>}
-            {success && <div className="info-banner success" style={{ marginBottom: "0.75rem" }}>{success}</div>}
+        <div className="max-w-4xl mx-auto bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+            {/* Status banners */}
+            {error && (
+                <div className="mx-6 mt-4 flex items-center gap-2 px-4 py-3 rounded-lg border bg-red-50 border-red-200 text-red-700 text-sm">
+                    ❌ {error}
+                    <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+                </div>
+            )}
+            {success && (
+                <div className="mx-6 mt-4 flex items-center gap-2 px-4 py-3 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 text-sm">
+                    ✅ {success}
+                </div>
+            )}
 
             {/* Top row: selector + create + delete */}
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
-                <select
-                    className="form-select"
-                    value={selected || ""}
-                    onChange={(e) => handleSelectProfile(e.target.value)}
-                    style={{ flex: 1 }}
-                >
-                    {profileNames.length === 0 && <option value="">Chưa có profile</option>}
-                    {profileNames.map((n) => (
-                        <option key={n} value={n}>{n}</option>
-                    ))}
-                </select>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowCreateDialog(true)}>
-                    ➕ Tạo mới
-                </button>
-                <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => selected && setConfirmDelete(selected)}
-                    disabled={!selected}
-                >
-                    🗑️ Xóa
-                </button>
+            <div className="p-6 flex items-center gap-4 border-b border-slate-100">
+                <div className="w-[60%]">
+                    <select
+                        className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-sm font-medium focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                        value={selected || ""}
+                        onChange={(e) => handleSelectProfile(e.target.value)}
+                    >
+                        {profileNames.length === 0 && <option value="">Chưa có profile</option>}
+                        {profileNames.map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="flex flex-1 items-center justify-end gap-3">
+                    <button
+                        className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all cursor-pointer"
+                        onClick={() => setShowCreateDialog(true)}
+                    >
+                        <Plus className="w-[18px] h-[18px]" /> Tạo mới
+                    </button>
+                    <button
+                        className="flex items-center gap-2 border border-red-200 text-red-600 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-red-50 transition-all cursor-pointer disabled:opacity-50"
+                        onClick={() => selected && setConfirmDelete(selected)}
+                        disabled={!selected}
+                    >
+                        <Trash2 className="w-[18px] h-[18px]" /> Xóa
+                    </button>
+                </div>
             </div>
 
             {/* Create dialog */}
             {showCreateDialog && (
-                <div className="settings-card" style={{ marginBottom: "1rem" }}>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                        <input
-                            className="form-input"
-                            placeholder="Tên profile mới..."
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                            style={{ flex: 1 }}
-                        />
-                        <button className="btn btn-primary btn-sm" onClick={handleCreate} disabled={saving}>
-                            ✅ Tạo
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setShowCreateDialog(false); setNewName(""); }}>
-                            ❌ Hủy
-                        </button>
-                    </div>
+                <div className="mx-6 mt-4 flex items-center gap-3 p-4 rounded-lg border border-indigo-200 bg-indigo-50">
+                    <input
+                        className="flex-1 rounded-lg border-slate-300 text-sm py-2 px-3 focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="Tên profile mới..."
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                        autoFocus
+                    />
+                    <button
+                        className="px-4 py-2 text-sm font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all cursor-pointer disabled:opacity-50"
+                        onClick={handleCreate}
+                        disabled={saving}
+                    >
+                        Tạo
+                    </button>
+                    <button
+                        className="px-4 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
+                        onClick={() => { setShowCreateDialog(false); setNewName(""); }}
+                    >
+                        Hủy
+                    </button>
                 </div>
             )}
 
             {/* Delete confirmation */}
             {confirmDelete && (
-                <div className="info-banner warning" style={{ marginBottom: "1rem" }}>
-                    ⚠️ Bạn có chắc muốn xóa profile &quot;<strong>{confirmDelete}</strong>&quot;?
-                    <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem" }}>
-                        <button className="btn btn-primary btn-sm" onClick={handleDelete} disabled={saving}>
-                            🗑️ Xác nhận xóa
+                <div className="mx-6 mt-4 p-4 rounded-lg border border-amber-200 bg-amber-50">
+                    <p className="text-sm text-amber-800 mb-3">
+                        ⚠️ Bạn có chắc muốn xóa profile &quot;<strong>{confirmDelete}</strong>&quot;?
+                    </p>
+                    <div className="flex gap-2">
+                        <button
+                            className="px-4 py-2 text-sm font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all cursor-pointer disabled:opacity-50"
+                            onClick={handleDelete}
+                            disabled={saving}
+                        >
+                            Xác nhận xóa
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setConfirmDelete(null)}>
+                        <button
+                            className="px-4 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
+                            onClick={() => setConfirmDelete(null)}
+                        >
                             Hủy
                         </button>
                     </div>
                 </div>
             )}
 
-            {selected && !confirmDelete && (
+            {selected && !confirmDelete && !showCreateDialog && (
                 <>
-                    {/* Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    {/* Profile info bar */}
+                    <div className="px-6 py-4 bg-slate-50 flex items-center justify-between border-b border-slate-100">
                         <div>
-                            <div style={{ fontSize: "1rem", fontWeight: 700 }}>Profile: {selected}</div>
-                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                                Đã chọn <strong style={{ color: "var(--text-body)" }}>{visibleCount}</strong> / {items.length} chỉ tiêu
-                            </div>
+                            <h3 className="text-base font-bold text-slate-800">Profile: {selected}</h3>
+                            <p className="text-xs font-medium text-slate-500 mt-0.5">
+                                Đã chọn <strong className="text-slate-800">{visibleCount}</strong> / {items.length} chỉ tiêu
+                            </p>
                         </div>
-                        <label className="checkbox-label" style={{ fontSize: "0.85rem" }}>
-                            <input type="checkbox" checked={allChecked} onChange={toggleAll} />
-                            Chọn tất cả
+                        <label className="flex items-center gap-2 cursor-pointer select-none group">
+                            <span className="text-xs font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">CHỌN TẤT CẢ</span>
+                            <input
+                                type="checkbox"
+                                checked={allChecked}
+                                onChange={toggleAll}
+                                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
                         </label>
                     </div>
 
-                    {/* Table header */}
-                    <div className="profile-list-header">
-                        <span style={{ width: 40, textAlign: "center" }}>STT</span>
-                        <span style={{ flex: 1, paddingLeft: 8 }}>Tên chỉ tiêu</span>
-                        <span style={{ width: 60, textAlign: "center" }}>Thao tác</span>
-                    </div>
+                    {/* Scrollable metric list */}
+                    <div className="max-h-[420px] overflow-y-auto">
+                        {/* ĐÃ CHỌN section */}
+                        {checked.length > 0 && (
+                            <div className="bg-indigo-50/30">
+                                <div className="px-6 py-2 sticky top-0 bg-indigo-100/90 backdrop-blur-sm z-10 flex items-center justify-between border-b border-indigo-200/50">
+                                    <span className="text-[10px] font-bold text-indigo-600 tracking-wider">ĐÃ CHỌN</span>
+                                    <span className="text-[10px] font-medium text-indigo-500 italic">Kéo thả hoặc dùng nút để sắp xếp</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    {checked.map((item, idx) => {
+                                        const name = METRIC_DISPLAY[item.metric_key] || item.metric_key;
+                                        const stt = String(idx + 1).padStart(2, "0");
+                                        return (
+                                            <div
+                                                key={item.metric_key}
+                                                className="bg-indigo-50/50 flex items-center px-6 py-3 border-b border-indigo-100/50 group hover:bg-indigo-100/40 transition-colors"
+                                            >
+                                                <span className="text-xs font-mono text-indigo-400 w-10 shrink-0">{stt}</span>
+                                                <input
+                                                    type="checkbox"
+                                                    checked
+                                                    onChange={() => toggleItem(item.metric_key)}
+                                                    className="w-5 h-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer mr-4"
+                                                />
+                                                <span className="text-sm font-bold text-indigo-900 flex-1">{name}</span>
+                                                <div className="flex gap-1 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
+                                                        onClick={() => moveUp(item.metric_key)}
+                                                        disabled={idx === 0}
+                                                    >
+                                                        <ArrowUp className="w-[18px] h-[18px]" />
+                                                    </button>
+                                                    <button
+                                                        className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
+                                                        onClick={() => moveDown(item.metric_key)}
+                                                        disabled={idx >= checked.length - 1}
+                                                    >
+                                                        <ArrowDown className="w-[18px] h-[18px]" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
-                    {/* Scrollable list */}
-                    <div className="profile-list" style={{ maxHeight: 420, overflow: "auto" }}>
-                        {(() => {
-                            let ckStt = 0;
-                            let ucStt = 0;
-                            return displayItems.map((item) => {
-                                const key = item.metric_key;
-                                const name = METRIC_DISPLAY[key] || key;
-                                const isChecked = item.visible;
-                                const stt = isChecked ? ++ckStt : ++ucStt;
-                                const ckIdx = isChecked ? ckStt - 1 : -1;
-
-                                return (
-                                    <div key={key} className={`profile-row ${isChecked ? "checked" : "unchecked"}`}>
-                                        <span className="profile-stt" style={isChecked ? { color: "var(--accent)", fontWeight: 700 } : { color: "var(--text-muted)" }}>
-                                            {stt}
-                                        </span>
-                                        <label className="profile-name" style={{ flex: 1 }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={isChecked}
-                                                onChange={() => toggleItem(key)}
-                                            />
-                                            <span style={isChecked ? { fontWeight: 600, color: "var(--text-primary)" } : { color: "var(--text-muted)" }}>
-                                                {name}
-                                            </span>
-                                        </label>
-                                        {isChecked && (
-                                            <span className="profile-actions">
-                                                <button
-                                                    className="btn btn-sm"
-                                                    onClick={() => moveUp(key)}
-                                                    disabled={ckIdx === 0}
-                                                    style={{ padding: "2px 6px", fontSize: "0.75rem" }}
-                                                >↑</button>
-                                                <button
-                                                    className="btn btn-sm"
-                                                    onClick={() => moveDown(key)}
-                                                    disabled={ckIdx >= checked.length - 1}
-                                                    style={{ padding: "2px 6px", fontSize: "0.75rem" }}
-                                                >↓</button>
-                                            </span>
-                                        )}
-                                    </div>
-                                );
-                            });
-                        })()}
+                        {/* CHƯA CHỌN section */}
+                        {unchecked.length > 0 && (
+                            <div className="bg-slate-100/30">
+                                <div className="px-6 py-2 sticky top-0 bg-slate-200/90 backdrop-blur-sm z-10 border-b border-slate-300/50">
+                                    <span className="text-[10px] font-bold text-slate-500 tracking-wider">CHƯA CHỌN</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    {unchecked.map((item, idx) => {
+                                        const name = METRIC_DISPLAY[item.metric_key] || item.metric_key;
+                                        const stt = String(checked.length + idx + 1).padStart(2, "0");
+                                        return (
+                                            <div
+                                                key={item.metric_key}
+                                                className="bg-white flex items-center px-6 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                                            >
+                                                <span className="text-xs font-mono text-slate-300 w-10 shrink-0">{stt}</span>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={false}
+                                                    onChange={() => toggleItem(item.metric_key)}
+                                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer mr-4"
+                                                />
+                                                <span className="text-sm font-medium text-slate-400 flex-1">{name}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer: Save/Cancel */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.75rem" }}>
-                        <button className="btn btn-secondary" onClick={() => selected && loadProfile(selected)}>
+                    <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-end gap-3 mt-auto">
+                        <button
+                            className="px-6 py-2.5 rounded-lg text-sm font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-50 transition-all cursor-pointer"
+                            onClick={() => selected && loadProfile(selected)}
+                        >
                             Hủy bỏ
                         </button>
-                        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                            {saving ? "⏳ Đang lưu..." : "💾 Lưu profile"}
+                        <button
+                            className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 cursor-pointer"
+                            onClick={handleSave}
+                            disabled={saving}
+                        >
+                            {saving ? (
+                                <><Loader2 className="w-5 h-5 animate-spin" /> Đang lưu...</>
+                            ) : (
+                                <><Save className="w-5 h-5" /> Lưu profile</>
+                            )}
                         </button>
                     </div>
                 </>

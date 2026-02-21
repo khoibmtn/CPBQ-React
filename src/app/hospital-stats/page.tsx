@@ -1,4 +1,5 @@
 "use client";
+import { Loader2, Trash2 } from "lucide-react";
 
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
@@ -272,8 +273,8 @@ export default function HospitalStatsPage() {
                     subtitle="Báo cáo hoạt động toàn bệnh viện · So sánh nhiều khoảng thời gian"
                     icon="🏛️"
                 />
-                <div className="loading-overlay">
-                    <div className="spinner" /> Đang tải danh sách thời gian...
+                <div className="flex items-center gap-2 justify-center py-12 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách thời gian...
                 </div>
             </>
         );
@@ -310,268 +311,308 @@ export default function HospitalStatsPage() {
 
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
 
-            {/* ── Period Selectors ── */}
-            <div style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", color: "var(--text-body)" }}>
-                    KHOẢNG THỜI GIAN SO SÁNH
+            {/* ── Period Selectors + Controls — White Card ── */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-4">
+                    Khoảng thời gian so sánh
+                </p>
+
+                <div className="space-y-4">
+                    {periods.map((p, idx) => {
+                        const color = PERIOD_COLORS[idx % PERIOD_COLORS.length];
+                        const fromMonths = getMonthsForYear(p.fromYear);
+                        const toMonths = getMonthsForYear(p.toYear);
+
+                        return (
+                            <div key={p.id} className="flex flex-wrap items-center gap-4">
+                                {/* Badge */}
+                                <span
+                                    className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] font-bold"
+                                    style={{ backgroundColor: color.border }}
+                                >
+                                    {idx + 1}
+                                </span>
+
+                                {/* From Year + Month */}
+                                <div className="flex items-center gap-2">
+                                    <select
+                                        className="text-sm rounded-lg border-slate-200 py-1.5 pl-3 pr-8 focus:ring-primary-500 focus:border-primary-500"
+                                        value={p.fromYear}
+                                        onChange={(e) => updatePeriod(p.id, "fromYear", +e.target.value)}
+                                    >
+                                        {years.map((y) => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        className="text-sm rounded-lg border-slate-200 py-1.5 pl-3 pr-8 focus:ring-primary-500 focus:border-primary-500"
+                                        value={p.fromMonth}
+                                        onChange={(e) => updatePeriod(p.id, "fromMonth", +e.target.value)}
+                                    >
+                                        {fromMonths.map((m) => (
+                                            <option key={m} value={m}>Tháng {String(m).padStart(2, "0")}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <span className="text-slate-300">→</span>
+
+                                {/* To Year + Month */}
+                                <div className="flex items-center gap-2">
+                                    <select
+                                        className="text-sm rounded-lg border-slate-200 py-1.5 pl-3 pr-8 focus:ring-primary-500 focus:border-primary-500"
+                                        value={p.toYear}
+                                        onChange={(e) => updatePeriod(p.id, "toYear", +e.target.value)}
+                                    >
+                                        {years.map((y) => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        className="text-sm rounded-lg border-slate-200 py-1.5 pl-3 pr-8 focus:ring-primary-500 focus:border-primary-500"
+                                        value={p.toMonth}
+                                        onChange={(e) => updatePeriod(p.id, "toMonth", +e.target.value)}
+                                    >
+                                        {toMonths.map((m) => (
+                                            <option key={m} value={m}>Tháng {String(m).padStart(2, "0")}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Remove button */}
+                                {periods.length > 1 && (
+                                    <button
+                                        className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                                        onClick={() => removePeriod(p.id)}
+                                        title="Xóa khoảng thời gian này"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={addPeriod}>
+
+                {/* Add period button — right below period rows */}
+                <button
+                    className="mt-3 border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 px-4 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all cursor-pointer"
+                    onClick={addPeriod}
+                >
                     ➕ Thêm khoảng so sánh
                 </button>
-            </div>
 
-            {periods.map((p, idx) => {
-                const color = PERIOD_COLORS[idx % PERIOD_COLORS.length];
-                const fromMonths = getMonthsForYear(p.fromYear);
-                const toMonths = getMonthsForYear(p.toYear);
-
-                return (
-                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                        {/* Badge */}
-                        <span className="period-badge" style={{ backgroundColor: color.border }}>
-                            {idx + 1}
-                        </span>
-
-                        {/* From Year */}
-                        <select
-                            className="form-select"
-                            value={p.fromYear}
-                            onChange={(e) => updatePeriod(p.id, "fromYear", +e.target.value)}
+                {/* ── Controls — border-t separator ── */}
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-4 pt-5 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            className="bg-primary-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold hover:bg-primary-700 transition-all shadow-sm shadow-indigo-200 cursor-pointer disabled:opacity-50"
+                            onClick={fetchData}
+                            disabled={loading}
                         >
-                            {years.map((y) => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
-
-                        {/* From Month */}
-                        <select
-                            className="form-select"
-                            value={p.fromMonth}
-                            onChange={(e) => updatePeriod(p.id, "fromMonth", +e.target.value)}
+                            {loading ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Đang truy vấn...
+                                </>
+                            ) : (
+                                "📊 Xem báo cáo"
+                            )}
+                        </button>
+                        <button
+                            className="border border-slate-200 hover:bg-slate-50 px-6 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+                            onClick={() => exportHospitalStats(allRows, periodLabels, { showRatio, showDiff })}
+                            disabled={!data || data.length === 0}
+                            title="Tải file Excel"
                         >
-                            {fromMonths.map((m) => (
-                                <option key={m} value={m}>Tháng {String(m).padStart(2, "0")}</option>
-                            ))}
-                        </select>
-
-                        <span style={{ color: "var(--text-muted)" }}>→</span>
-
-                        {/* To Year */}
-                        <select
-                            className="form-select"
-                            value={p.toYear}
-                            onChange={(e) => updatePeriod(p.id, "toYear", +e.target.value)}
-                        >
-                            {years.map((y) => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
-
-                        {/* To Month */}
-                        <select
-                            className="form-select"
-                            value={p.toMonth}
-                            onChange={(e) => updatePeriod(p.id, "toMonth", +e.target.value)}
-                        >
-                            {toMonths.map((m) => (
-                                <option key={m} value={m}>Tháng {String(m).padStart(2, "0")}</option>
-                            ))}
-                        </select>
-
-                        {/* Remove button */}
-                        {periods.length > 1 && (
-                            <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => removePeriod(p.id)}
-                                title="Xóa khoảng thời gian này"
-                            >
-                                🗑️
-                            </button>
-                        )}
+                            📥 Tải Excel
+                        </button>
                     </div>
-                );
-            })}
 
-            <hr className="divider" />
-
-            {/* ── Controls row ── */}
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
-                <button
-                    className="btn btn-primary"
-                    onClick={fetchData}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <>
-                            <div className="spinner" /> Đang truy vấn...
-                        </>
-                    ) : (
-                        "📊 Xem báo cáo"
-                    )}
-                </button>
-
-                <button
-                    className="btn btn-secondary"
-                    onClick={() => exportHospitalStats(allRows, periodLabels, { showRatio, showDiff })}
-                    disabled={!data || data.length === 0}
-                    title="Tải file Excel"
-                >
-                    📥 Tải Excel
-                </button>
-
-                <label className="checkbox-label">
-                    <input
-                        type="checkbox"
-                        checked={showRatio}
-                        onChange={(e) => setShowRatio(e.target.checked)}
-                        disabled={!canCompare}
-                    />
-                    Tỷ lệ %
-                </label>
-
-                <label className="checkbox-label">
-                    <input
-                        type="checkbox"
-                        checked={showDiff}
-                        onChange={(e) => setShowDiff(e.target.checked)}
-                        disabled={!canCompare}
-                    />
-                    Chênh lệch
-                </label>
+                    <div className="flex items-center gap-6">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300"
+                                checked={showDiff}
+                                onChange={(e) => setShowDiff(e.target.checked)}
+                                disabled={!canCompare}
+                            />
+                            <span className="text-sm font-medium text-slate-600 group-hover:text-primary-600 transition-colors">
+                                Chênh lệch
+                            </span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300"
+                                checked={showRatio}
+                                onChange={(e) => setShowRatio(e.target.checked)}
+                                disabled={!canCompare}
+                            />
+                            <span className="text-sm font-medium text-slate-600 group-hover:text-primary-600 transition-colors">
+                                Tỷ lệ %
+                            </span>
+                        </label>
+                    </div>
+                </div>
             </div>
 
-            {/* ── Data Table ── */}
+            {/* ── Data Table — White Card ── */}
             {data && data.length > 0 && (
-                <div className="data-table-wrapper">
-                    <table className="data-table">
-                        <thead>
-                            {/* Header row 1 */}
-                            <tr>
-                                <th rowSpan={2} style={{ minWidth: 160 }}>Toàn BV</th>
-                                {GROUPS.map((g) => (
-                                    <th key={g} colSpan={colSpan}>{g}</th>
-                                ))}
-                            </tr>
-                            {/* Header row 2 */}
-                            <tr>
-                                {GROUPS.map((g) => (
-                                    <Fragment key={g}>
-                                        {periods.map((p, pi) => (
-                                            <th
-                                                key={`${g}-${p.id}`}
-                                                style={{ backgroundColor: PERIOD_COLORS[pi % PERIOD_COLORS.length].border }}
-                                            >
-                                                {periodLabels[pi]}
-                                            </th>
-                                        ))}
-                                        {showDiff && (
-                                            <th key={`${g}-diff`} style={{ backgroundColor: "var(--tbl-border)", color: "var(--tbl-subtotal-color)" }}>
-                                                Chênh lệch
-                                            </th>
-                                        )}
-                                        {showRatio && (
-                                            <th key={`${g}-ratio`} style={{ backgroundColor: "var(--tbl-sub-header-bg)", color: "var(--tbl-subtotal-color)" }}>
-                                                Tỷ lệ %
-                                            </th>
-                                        )}
-                                    </Fragment>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {(() => {
-                                let rowIdx = 0;
-                                return allRows.map((r, ri) => {
-                                    if (r.section) {
-                                        rowIdx = 0;
-                                        const nDataCols = colSpan * GROUPS.length;
+                <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="text-[13px] border-collapse">
+                            <thead>
+                                {/* Header row 1: Group names */}
+                                <tr className="bg-slate-50">
+                                    <th
+                                        rowSpan={2}
+                                        className="py-2 px-3 text-left border-b border-r border-slate-200 font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap sticky left-0 bg-slate-50 z-20"
+                                    >
+                                        Toàn BV
+                                    </th>
+                                    {GROUPS.map((g, gi) => (
+                                        <th
+                                            key={g}
+                                            colSpan={colSpan}
+                                            className={`py-1.5 px-2 text-center border-b border-slate-200 font-bold uppercase text-slate-600 ${gi < GROUPS.length - 1 ? 'border-r' : ''}`}
+                                        >
+                                            {g}
+                                        </th>
+                                    ))}
+                                </tr>
+                                {/* Header row 2: Period labels */}
+                                <tr>
+                                    {GROUPS.map((g, gi) => (
+                                        <Fragment key={g}>
+                                            {periods.map((p, pi) => (
+                                                <th
+                                                    key={`${g}-${p.id}`}
+                                                    className={`py-1.5 px-2 border-b border-slate-200 text-white whitespace-nowrap text-center text-[11px] font-semibold ${pi < periods.length - 1 || showDiff || showRatio ? 'border-r' : (gi < GROUPS.length - 1 ? 'border-r' : '')}`}
+                                                    style={{ backgroundColor: PERIOD_COLORS[pi % PERIOD_COLORS.length].border }}
+                                                >
+                                                    {periodLabels[pi]}
+                                                </th>
+                                            ))}
+                                            {showDiff && (
+                                                <th
+                                                    key={`${g}-diff`}
+                                                    className={`py-1.5 px-2 border-b border-slate-200 bg-slate-200 text-slate-600 whitespace-nowrap text-center text-[11px] font-semibold ${showRatio || gi < GROUPS.length - 1 ? 'border-r' : ''}`}
+                                                >
+                                                    Chênh lệch
+                                                </th>
+                                            )}
+                                            {showRatio && (
+                                                <th
+                                                    key={`${g}-ratio`}
+                                                    className={`py-1.5 px-2 border-b border-slate-200 bg-slate-100 text-slate-600 whitespace-nowrap text-center text-[11px] font-semibold ${gi < GROUPS.length - 1 ? 'border-r' : ''}`}
+                                                >
+                                                    Tỷ lệ %
+                                                </th>
+                                            )}
+                                        </Fragment>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {(() => {
+                                    let rowIdx = 0;
+                                    const nDataCols = colSpan * GROUPS.length + 1;
+                                    return allRows.map((r, ri) => {
+                                        if (r.section) {
+                                            rowIdx = 0;
+                                            return (
+                                                <tr key={ri} className="bg-slate-50">
+                                                    <td
+                                                        className="py-1.5 px-2.5 font-bold text-slate-700 uppercase tracking-tight sticky left-0 bg-slate-50 z-10 whitespace-nowrap"
+                                                    >
+                                                        {r.label}
+                                                    </td>
+                                                    <td
+                                                        colSpan={nDataCols - 1}
+                                                        className="bg-slate-50"
+                                                    />
+                                                </tr>
+                                            );
+                                        }
+
+                                        const isDecimal = r.label === "Ngày ĐT TB";
+                                        const isCount = r.label === "Số lượt";
+                                        const isTotalRow = r.totalStyle;
+                                        rowIdx++;
+
                                         return (
-                                            <tr key={ri} className="section-row">
-                                                <td className="label-col" style={{
-                                                    color: "var(--tbl-section-color)",
-                                                    background: "var(--tbl-section-bg)",
-                                                    fontWeight: 700,
-                                                    fontSize: 13,
-                                                }}>
+                                            <tr
+                                                key={ri}
+                                                className={
+                                                    isTotalRow
+                                                        ? "bg-indigo-50 font-bold"
+                                                        : "hover:bg-slate-50 transition-colors"
+                                                }
+                                            >
+                                                <td
+                                                    className={`py-1.5 px-2.5 pl-4 border-r border-slate-100 sticky left-0 z-10 whitespace-nowrap ${isTotalRow
+                                                        ? "bg-indigo-50 font-bold"
+                                                        : "bg-white"
+                                                        }`}
+                                                >
                                                     {r.label}
                                                 </td>
-                                                <td
-                                                    colSpan={nDataCols}
-                                                    style={{ background: "var(--tbl-section-bg)" }}
-                                                />
+                                                {GROUPS.map((g, gi) => {
+                                                    const vals = r.values?.[g] || [];
+                                                    return (
+                                                        <Fragment key={g}>
+                                                            {vals.map((v, pi) => (
+                                                                <td
+                                                                    key={`${g}-${pi}`}
+                                                                    className={`py-1.5 px-2.5 text-right border-r border-slate-100 whitespace-nowrap ${isTotalRow ? "text-primary-600 font-bold" : ""
+                                                                        }`}
+                                                                >
+                                                                    {isDecimal
+                                                                        ? fmtDec(v)
+                                                                        : isCount
+                                                                            ? fmt(v, true)
+                                                                            : fmt(v)}
+                                                                </td>
+                                                            ))}
+                                                            {showDiff && (() => {
+                                                                const d = diffValue(vals[0], vals[vals.length - 1]);
+                                                                return (
+                                                                    <td key={`${g}-diff`} className="py-1.5 px-2.5 text-right border-r border-slate-100 whitespace-nowrap">
+                                                                        {d ? (
+                                                                            <span style={{ color: d.color }} className="font-semibold">
+                                                                                {d.text}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-slate-300">-</span>
+                                                                        )}
+                                                                    </td>
+                                                                );
+                                                            })()}
+                                                            {showRatio && (() => {
+                                                                const p = pctChange(vals[0], vals[vals.length - 1]);
+                                                                return (
+                                                                    <td key={`${g}-ratio`} className={`py-1.5 px-2.5 text-right whitespace-nowrap ${gi < GROUPS.length - 1 ? 'border-r border-slate-100' : ''}`}>
+                                                                        {p ? (
+                                                                            <span style={{ color: p.color }} className="font-semibold">
+                                                                                {p.text}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-slate-300">-</span>
+                                                                        )}
+                                                                    </td>
+                                                                );
+                                                            })()}
+                                                        </Fragment>
+                                                    );
+                                                })}
                                             </tr>
                                         );
-                                    }
-
-                                    const isDecimal = r.label === "Ngày ĐT TB";
-                                    const isCount = r.label === "Số lượt";
-                                    const curIdx = rowIdx++;
-
-                                    const rowClass = r.totalStyle
-                                        ? "row-total"
-                                        : curIdx % 2 === 0
-                                            ? "row-even"
-                                            : "row-odd";
-
-                                    return (
-                                        <tr key={ri} className={rowClass}>
-                                            <td className="label-col" style={r.totalStyle ? { fontWeight: 700 } : {}}>
-                                                {r.label}
-                                            </td>
-                                            {GROUPS.map((g) => {
-                                                const vals = r.values?.[g] || [];
-                                                return (
-                                                    <Fragment key={g}>
-                                                        {vals.map((v, pi) => (
-                                                            <td
-                                                                key={`${g}-${pi}`}
-                                                                className="right"
-                                                                style={r.totalStyle ? { fontWeight: 700 } : {}}
-                                                            >
-                                                                {isDecimal
-                                                                    ? fmtDec(v)
-                                                                    : isCount
-                                                                        ? fmt(v, true)
-                                                                        : fmt(v)}
-                                                            </td>
-                                                        ))}
-                                                        {showDiff && (() => {
-                                                            const d = diffValue(vals[0], vals[vals.length - 1]);
-                                                            return (
-                                                                <td key={`${g}-diff`} className="right">
-                                                                    {d ? (
-                                                                        <span style={{ color: d.color, fontWeight: 600 }}>
-                                                                            {d.text}
-                                                                        </span>
-                                                                    ) : (
-                                                                        "-"
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })()}
-                                                        {showRatio && (() => {
-                                                            const p = pctChange(vals[0], vals[vals.length - 1]);
-                                                            return (
-                                                                <td key={`${g}-ratio`} className="right">
-                                                                    {p ? (
-                                                                        <span style={{ color: p.color, fontWeight: 600 }}>
-                                                                            {p.text}
-                                                                        </span>
-                                                                    ) : (
-                                                                        "-"
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })()}
-                                                    </Fragment>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                });
-                            })()}
-                        </tbody>
-                    </table>
+                                    });
+                                })()}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 

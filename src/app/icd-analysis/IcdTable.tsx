@@ -166,7 +166,7 @@ export default function IcdTable({
                             <th
                                 className="ct-th"
                                 colSpan={2}
-                                style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}
+                                style={{ textAlign: "center", backgroundColor: "#d97706", color: "#fff" }}
                             >
                                 Chênh lệch ({diffReverse ? "T-P" : "P-T"})
                             </th>
@@ -181,7 +181,7 @@ export default function IcdTable({
                                 <th
                                     key={`sub-${idx}-${ci}`}
                                     className="ct-th ct-sub-header"
-                                    style={{ backgroundColor: color.border, textAlign: "center" }}
+                                    style={{ textAlign: "center", backgroundColor: color.bg }}
                                 >
                                     {cl}
                                 </th>
@@ -189,10 +189,10 @@ export default function IcdTable({
                         })}
                         {showDiff && (
                             <>
-                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}>
+                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "#fef3c7", color: "#78350f" }}>
                                     {diffValueLabel}
                                 </th>
-                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "var(--tbl-diff-header, #92400e)" }}>
+                                <th className="ct-th ct-sub-header" style={{ textAlign: "center", backgroundColor: "#fef3c7", color: "#78350f" }}>
                                     %
                                 </th>
                             </>

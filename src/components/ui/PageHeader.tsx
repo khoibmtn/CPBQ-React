@@ -1,22 +1,35 @@
+import { type LucideIcon } from "lucide-react";
+
 interface PageHeaderProps {
     title: string;
     subtitle?: string;
-    icon?: string;
-    gradient?: string;
+    icon?: LucideIcon | string;
+    gradient?: string; // ignored, kept for backward compat
 }
 
 export default function PageHeader({
     title,
     subtitle,
-    icon = "📊",
-    gradient = "linear-gradient(135deg, rgba(37,99,235,0.9), rgba(79,70,229,0.85))",
+    icon,
 }: PageHeaderProps) {
+    const renderIcon = () => {
+        if (!icon) return null;
+        if (typeof icon === "string") return <span className="text-2xl">{icon}</span>;
+        const Icon = icon;
+        return <Icon className="w-7 h-7 text-primary-600" />;
+    };
+
     return (
-        <div className="page-header" style={{ background: gradient }}>
-            <h1>
-                {icon} {title}
-            </h1>
-            {subtitle && <p>{subtitle}</p>}
+        <div className="mb-6">
+            <div className="flex items-center gap-3 mb-1">
+                {renderIcon()}
+                <h1 className="font-heading text-2xl font-bold text-gray-900">
+                    {title}
+                </h1>
+            </div>
+            {subtitle && (
+                <p className="text-sm text-gray-500 ml-10">{subtitle}</p>
+            )}
         </div>
     );
 }

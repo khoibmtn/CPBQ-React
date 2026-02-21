@@ -8,18 +8,16 @@
 - **BigQuery Project**: `cpbq-487004`, dataset `cpbq_data`, view `v_thanh_toan`
 - **GitHub**: `khoibmtn/CPBQ-React`
 
-## Trạng thái hiện tại — 2026-02-21
+## Trạng thái hiện tại — 2026-02-22
 
-### Latest Session (2026-02-21 11:35)
+### Latest Session (2026-02-22 06:30)
 
 #### Tasks Completed
-- [x] **Excel Export date format fix** — Reverse-transform ISO dates back to original compact format in export (`1977-09-02` → `19770902`, `2026-01-02T07:35:00` → `'202601020735`)
-- [x] **Import date parsing fix** — Updated `parseDateInt` and `parseDatetimeStr` to accept ISO-formatted dates/datetimes, enabling re-import of exported files
-- [x] **Per-sheet state persistence** — Upload/overwrite status (`doneRows`, `doneMode`, `checkedRows`, `removedRows`) now persists across sheet switches via ref Maps
-- [x] **Per-sheet+tab upload messages** — `uploadMsg` changed to Map keyed by `sheetName:tab`, messages only show in relevant tab and persist across tab/sheet switches
-- [x] **Import preview all columns** — Changed from 14 hardcoded `DISPLAY_COLS` to full `SCHEMA_COLS` so all columns (e.g., `ma_loaikcb`) have data
-- [x] **Column visibility menu improvements** — Opaque background (was semi-transparent), `colMode` toggle (`Tất cả` / `Tùy chỉnh`), localStorage persistence across sessions
-- [x] **Workflow rewrite** — Updated `/load-context`, `/sync`, `/save-context` for CPBQ-React (Next.js, branching, deploy)
+- [x] **ICD Analysis Excel Export** — Added `exportIcdAnalysis` to `lib/exportExcel.ts` using ExcelJS (same pattern as `exportCostByDept`): merged headers, thin borders, auto-width columns, blue ICD codes, total row. Download button "📥 Tải Excel" added to `icd-analysis/page.tsx`
+- [x] **LookupEditor redesign** — Rewrote `components/settings/LookupEditor.tsx` from always-editable inputs to read-only table with inline edit mode: bordered table wrapper with rounded corners, gray header row with uppercase labels, alternating row colors (white/`#f8fafc`), hover highlight, `table-layout: fixed` to prevent column shift, pencil/trash icon buttons per row, amber background for editing row with confirm/cancel buttons
+- [x] **Khoa table column widths** — Added `width` property to `Column` interface in LookupEditor; set specific widths for Khoa columns (thứ tự 65px, mã CSKCB 80px, mã khoa XML 95px, tên rút gọn 110px, hiệu lực 95px) so Tên đầy đủ gets remaining space
+- [x] **MergeManager UI redesign** — Rewrote `components/settings/MergeManager.tsx` to match Stitch design: bordered cards with gray header for Khoa đích section, divider line between target and sources, source items as gray rows with trash icons and hover effects, dashed-border dropdown for adding new sources, closeable alerts, indigo Save button with shadow, Lucide icons throughout
+- [x] **ICD Analysis UI fixes** (previous session) — Dropdown overlap fix, legend removal, header row 2 styling with period-based background colors
 
 ### Đã hoàn thành (tổng)
 - [x] Khởi tạo dự án Next.js (App Router, TypeScript)
@@ -31,9 +29,14 @@
   - [x] TabPivot: pivot summary display
   - [x] TabManage: multi-condition search, row select/delete, Excel export (schema-ordered, original date format)
   - [x] TabImport: row-level data, sheet selector, summary/valid/duplicate tabs, column toggle with localStorage, per-sheet state persistence
-- [x] **Trang Chi phí theo khoa** (cost-by-dept) — multi-period comparison, khoa merge, profile columns
-- [x] **Trang Chi phí theo mã bệnh** (icd-analysis) — ICD-3 analysis, cumulative %, filters
-- [x] **Trang Cấu hình** (settings) — lookup CRUD, profile management, khoa merge groups
+- [x] **Trang Chi phí theo khoa** (cost-by-dept) — multi-period comparison, khoa merge, profile columns, Excel export
+- [x] **Trang Chi phí theo mã bệnh** (icd-analysis) — ICD-3 analysis, cumulative %, filters, Excel export
+- [x] **Trang Cấu hình** (settings) — lookup CRUD with table-style UI (inline edit), profile management, khoa merge groups (Stitch-inspired design)
+
+### Settings Page — Chi tiết kỹ thuật
+- **LookupEditor** (`components/settings/LookupEditor.tsx`): Generic table editor for all lookup tabs (Loại KCB, Cơ sở KCB, Khoa). Read-only by default with pencil/trash icons; inline editing with confirm/cancel. Supports per-column `width` property. Uses `table-layout: fixed` and inline styles for bordered table with alternating rows.
+- **MergeManager** (`components/settings/MergeManager.tsx`): Stitch-inspired card layout for merge groups. Each card has gray header (khoa đích dropdown + delete button), divider, source list (gray rows with trash), dashed-border add dropdown. Indigo save button. Uses Lucide icons (Trash2, Plus, Save).
+- **ProfileManager** (`components/settings/ProfileManager.tsx`): Profile column configuration
 
 ### Import Tab — Chi tiết kỹ thuật
 - **Backend POST** `/api/bq/overview/import`: Trả row-level data cho tất cả sheet (full SCHEMA_COLS), mỗi dòng có `_isDuplicate` flag
@@ -43,6 +46,11 @@
 - **Upload messages**: Map<`sheetName:tab`, message> — scoped per sheet+tab
 - **Column visibility**: `colMode` (`all`/`custom`), saved to `localStorage('import_visible_cols')`
 - **Export**: Reverse-transforms dates to original format before writing Excel
+
+### Excel Export — Chi tiết kỹ thuật
+- **`lib/exportExcel.ts`**: Contains `exportHospitalStats` (xlsx library), `exportCostByDept` (ExcelJS), `exportIcdAnalysis` (ExcelJS)
+- **ExcelJS pattern**: Workbook → Worksheet → addRow → styleRow (thin borders, fonts, alignment) → mergeCells → auto-width columns → writeBuffer → saveAs blob
+- **ICD export specifics**: Merged period headers, sub-column labels (Số lượt, Ngày ĐTTB, BQĐT, %CP), optional diff columns, blue ICD code font, total row
 
 ## Cấu trúc file chính
 
@@ -57,19 +65,26 @@ src/
 │   │   ├── TabManage.tsx                ✅ (Excel export with date reverse-transform)
 │   │   └── TabImport.tsx                ✅ (per-sheet state, col mode, scoped messages)
 │   ├── cost-by-dept/page.tsx            ✅
-│   ├── icd-analysis/page.tsx            ✅
-│   ├── settings/page.tsx                ✅
+│   ├── icd-analysis/page.tsx            ✅ (+ Excel export button)
+│   ├── settings/page.tsx                ✅ (column widths config)
 │   └── api/bq/
 │       ├── hospital-stats/route.ts
 │       ├── overview/import/route.ts     ✅ (ISO date parsing, full SCHEMA_COLS preview)
 │       ├── overview/manage/route.ts
 │       └── ...
-├── components/ui/
-│   ├── DataTable.tsx                    ✅ (disabledRows, rowClassName, pagination input)
-│   ├── SearchBuilder.tsx
-│   └── ...
+├── components/
+│   ├── ui/
+│   │   ├── DataTable.tsx                ✅ (disabledRows, rowClassName, pagination input)
+│   │   ├── SearchBuilder.tsx
+│   │   └── ...
+│   └── settings/
+│       ├── LookupEditor.tsx             ✅ (table-style with inline edit, column widths)
+│       ├── MergeManager.tsx             ✅ (Stitch-inspired card UI)
+│       └── ProfileManager.tsx
 └── lib/
     ├── config.ts, bigquery.ts, formatters.ts, schema.ts
+    ├── exportExcel.ts                   ✅ (exportHospitalStats, exportCostByDept, exportIcdAnalysis)
+    └── metrics.ts
 ```
 
 ## Workflows

@@ -1,4 +1,5 @@
 "use client";
+import { Loader2, ClipboardList } from "lucide-react";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -7,6 +8,7 @@ import SectionTitle from "@/components/ui/SectionTitle";
 import PeriodSelector, { PeriodDef } from "@/components/ui/PeriodSelector";
 import IcdTable, { IcdRow, IcdPeriodData, CostType, DiffMetric } from "./IcdTable";
 import { formatPeriodLabel } from "@/lib/metrics";
+import { exportIcdAnalysis } from "@/lib/exportExcel";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
 
@@ -242,8 +244,8 @@ export default function IcdAnalysisPage() {
                     icon="🔬"
                     gradient="linear-gradient(135deg, rgba(139,92,246,0.9), rgba(236,72,153,0.85))"
                 />
-                <div className="loading-overlay">
-                    <div className="spinner" /> Đang tải...
+                <div className="flex items-center gap-2 justify-center py-12 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
                 </div>
             </>
         );
@@ -274,15 +276,17 @@ export default function IcdAnalysisPage() {
 
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
 
-            <SectionTitle icon="📅">Chọn khoảng thời gian</SectionTitle>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+                <SectionTitle icon="📅">Chọn khoảng thời gian</SectionTitle>
 
-            <PeriodSelector
-                yearMonths={initData.yearMonths}
-                periods={periods}
-                onChange={setPeriods}
-                onCompare={handleCompare}
-                loading={loading}
-            />
+                <PeriodSelector
+                    yearMonths={initData.yearMonths}
+                    periods={periods}
+                    onChange={setPeriods}
+                    onCompare={handleCompare}
+                    loading={loading}
+                />
+            </div>
 
             {/* Filter bar — always visible after data loads */}
             {periodsData && (
@@ -290,9 +294,9 @@ export default function IcdAnalysisPage() {
                     <div className="icd-filter-bar">
                         {/* Khoa filter */}
                         <div className="icd-filter-item">
-                            <label className="form-label">Thống kê theo khoa</label>
+                            <label className="icd-filter-label">Thống kê theo khoa</label>
                             <select
-                                className="form-select form-select-sm"
+                                className=""
                                 value={selectedKhoa}
                                 onChange={(e) => setSelectedKhoa(e.target.value)}
                             >
@@ -304,9 +308,9 @@ export default function IcdAnalysisPage() {
 
                         {/* Sort period */}
                         <div className="icd-filter-item">
-                            <label className="form-label">Mốc thống kê</label>
+                            <label className="icd-filter-label">Mốc thống kê</label>
                             <select
-                                className="form-select form-select-sm"
+                                className=""
                                 value={sortPeriodText}
                                 onChange={(e) => setSortPeriodText(e.target.value)}
                             >
@@ -318,9 +322,9 @@ export default function IcdAnalysisPage() {
 
                         {/* Cost type */}
                         <div className="icd-filter-item">
-                            <label className="form-label">Loại thống kê</label>
+                            <label className="icd-filter-label">Loại thống kê</label>
                             <select
-                                className="form-select form-select-sm"
+                                className=""
                                 value={costTypeLabel}
                                 onChange={(e) => setCostTypeLabel(e.target.value)}
                             >
@@ -332,9 +336,9 @@ export default function IcdAnalysisPage() {
 
                         {/* ML2 filter */}
                         <div className="icd-filter-item">
-                            <label className="form-label">🏥 Loại hình</label>
+                            <label className="icd-filter-label">🏥 Loại hình</label>
                             <select
-                                className="form-select form-select-sm"
+                                className=""
                                 value={ml2}
                                 onChange={(e) => setMl2(e.target.value)}
                             >
@@ -346,10 +350,10 @@ export default function IcdAnalysisPage() {
 
                         {/* Cumulative % threshold */}
                         <div className="icd-filter-item icd-filter-narrow">
-                            <label className="form-label">Ngưỡng %</label>
+                            <label className="icd-filter-label">Ngưỡng %</label>
                             <input
                                 type="number"
-                                className="form-select form-select-sm"
+                                className=""
                                 min={1}
                                 max={100}
                                 value={ratio}
@@ -359,9 +363,9 @@ export default function IcdAnalysisPage() {
 
                         {/* Diff metric */}
                         <div className="icd-filter-item">
-                            <label className="form-label">📊 Chênh lệch</label>
+                            <label className="icd-filter-label">📊 Chênh lệch</label>
                             <select
-                                className="form-select form-select-sm"
+                                className=""
                                 value={diffChoice}
                                 onChange={(e) => setDiffChoice(e.target.value)}
                                 disabled={!hasDiff}
@@ -375,9 +379,9 @@ export default function IcdAnalysisPage() {
                         {/* Diff direction toggle */}
                         {hasDiff && diffChoice !== "Không" && (
                             <div className="icd-filter-item icd-filter-narrow">
-                                <label className="form-label">Hướng</label>
+                                <label className="icd-filter-label">Hướng</label>
                                 <button
-                                    className="btn btn-secondary btn-sm"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                                     onClick={() => setDiffReverse(!diffReverse)}
                                     title="T-P: Đầu − Cuối · P-T: Cuối − Đầu"
                                 >
@@ -387,27 +391,44 @@ export default function IcdAnalysisPage() {
                         )}
                     </div>
 
-                    {/* Info line */}
-                    <div className="icd-info-line">
-                        <span>
-                            📋 Hiển thị <strong>{icdList.length}</strong> / {totalIcdCount} mã bệnh
-                            {" "}(tích lũy {pctColLabel} ≈ <strong>{cumSum.toFixed(1)}%</strong> / {ratio}%)
-                        </span>
+                    {/* Info line + download */}
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="icd-info-line" style={{ marginBottom: 0 }}>
+                            <ClipboardList className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span>
+                                Hiển thị <strong>{icdList.length} / {totalIcdCount}</strong> mã bệnh
+                            </span>
+                            <span className="icd-info-separator">|</span>
+                            <span>
+                                (tích lũy {pctColLabel} ≈ <strong>{cumSum.toFixed(1)}%</strong> / {ratio}%)
+                            </span>
+                        </div>
+                        <button
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            onClick={() => exportIcdAnalysis(
+                                periodsData,
+                                icdList,
+                                costType,
+                                pctColLabel,
+                                diffMetric,
+                                diffReverse
+                            )}
+                            title="Tải file Excel"
+                        >
+                            📥 Tải Excel
+                        </button>
                     </div>
 
                     {/* Table */}
                     {icdList.length > 0 ? (
-                        <>
-                            <SectionTitle icon="📊">Bảng thống kê ICD</SectionTitle>
-                            <IcdTable
-                                periodsData={periodsData}
-                                icdList={icdList}
-                                costType={costType}
-                                pctColLabel={pctColLabel}
-                                diffMetric={diffMetric}
-                                diffReverse={diffReverse}
-                            />
-                        </>
+                        <IcdTable
+                            periodsData={periodsData}
+                            icdList={icdList}
+                            costType={costType}
+                            pctColLabel={pctColLabel}
+                            diffMetric={diffMetric}
+                            diffReverse={diffReverse}
+                        />
                     ) : (
                         <InfoBanner type="info">
                             ℹ️ Không có dữ liệu cho khoảng thời gian đã chọn.

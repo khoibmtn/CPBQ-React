@@ -1,26 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { type LucideIcon } from "lucide-react";
 
 interface Tab {
     id: string;
     label: string;
-    icon?: string;
+    icon?: LucideIcon | string;
 }
 
 interface TabGroupProps {
     tabs: Tab[];
     defaultTab?: string;
-    /** If provided, persist active tab to sessionStorage under this key */
     storageKey?: string;
-    children: (activeTab: string) => React.ReactNode;
+    children: (activeTab: string) => ReactNode;
 }
 
 export default function TabGroup({ tabs, defaultTab, storageKey, children }: TabGroupProps) {
-    // Always initialize with defaultTab to avoid SSR/client hydration mismatch
     const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || "");
 
-    // Restore from sessionStorage on client mount (after hydration)
     const isFirstRender = useRef(true);
     useEffect(() => {
         if (isFirstRender.current) {
@@ -40,21 +38,38 @@ export default function TabGroup({ tabs, defaultTab, storageKey, children }: Tab
         }
     }, [storageKey, activeTab, tabs]);
 
+    const renderIcon = (icon?: LucideIcon | string) => {
+        if (!icon) return null;
+        if (typeof icon === "string") return <span className="text-base">{icon}</span>;
+        const Icon = icon;
+        return <Icon className="w-4 h-4" />;
+    };
+
     return (
-        <div className="tab-group">
-            <div className="tab-nav">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.id}
-                        className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
-                        onClick={() => setActiveTab(tab.id)}
-                    >
-                        {tab.icon && <span className="tab-icon">{tab.icon}</span>}
-                        {tab.label}
-                    </button>
-                ))}
+        <div className="mb-6">
+            <div className="flex gap-0 border-b border-gray-200 mb-5">
+                {tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            className={`
+                                inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold
+                                border-b-2 -mb-px transition-colors cursor-pointer
+                                ${isActive
+                                    ? "text-primary-600 border-primary-600"
+                                    : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
+                                }
+                            `}
+                            onClick={() => setActiveTab(tab.id)}
+                        >
+                            {renderIcon(tab.icon)}
+                            {tab.label}
+                        </button>
+                    );
+                })}
             </div>
-            <div className="tab-content">{children(activeTab)}</div>
+            <div>{children(activeTab)}</div>
         </div>
     );
 }

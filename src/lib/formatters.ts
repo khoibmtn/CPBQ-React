@@ -36,10 +36,10 @@ export function pctChange(
     const sign = pct > 0 ? "+" : "";
     const color =
         pct > 0
-            ? "var(--tbl-diff-pos)"
+            ? "#16a34a"
             : pct < 0
-                ? "var(--tbl-diff-neg)"
-                : "var(--text-muted)";
+                ? "#dc2626"
+                : "#94a3b8";
     return { text: `${sign}${pct.toFixed(1)}%`, color, sign };
 }
 
@@ -68,7 +68,7 @@ export function diffValue(
     if (diff === 0) return null;
     const sign = diff > 0 ? "+" : "";
     const color =
-        diff > 0 ? "var(--tbl-diff-pos)" : "var(--tbl-diff-neg)";
+        diff > 0 ? "#16a34a" : "#dc2626";
     const txt =
         typeof diff === "number" && Math.abs(diff) < 100
             ? `${sign}${diff.toFixed(2)}`

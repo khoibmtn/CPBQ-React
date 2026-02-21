@@ -1,6 +1,7 @@
 "use client";
 
 import { getPeriodColor, formatPeriodLabel } from "@/lib/metrics";
+import { Plus, Trash2, BarChart3, Loader2 } from "lucide-react";
 
 export interface PeriodDef {
     id: number;
@@ -76,10 +77,12 @@ export default function PeriodSelector({
         onChange(periods.filter((p) => p.id !== id));
     };
 
+    const selectClasses = "rounded-lg border-gray-300 text-sm py-1.5 pl-3 pr-8 focus:border-primary-500 focus:ring-primary-500";
+
     return (
-        <div className="period-selector">
+        <div className="mb-6">
             {/* Period rows */}
-            <div className="period-rows">
+            <div className="flex flex-col gap-2 mb-4">
                 {periods.map((p, idx) => {
                     const color = getPeriodColor(idx);
                     const label = formatPeriodLabel(
@@ -87,8 +90,7 @@ export default function PeriodSelector({
                     );
 
                     return (
-                        <div key={p.id} className="period-row">
-                            {/* Badge */}
+                        <div key={p.id} className="flex items-center gap-2 flex-wrap">
                             <span
                                 className="period-badge"
                                 style={{ backgroundColor: color.border }}
@@ -97,9 +99,8 @@ export default function PeriodSelector({
                                 {idx + 1}
                             </span>
 
-                            {/* From Year */}
                             <select
-                                className="form-select form-select-sm"
+                                className={selectClasses}
                                 value={p.fromYear}
                                 onChange={(e) =>
                                     updatePeriod(p.id, "fromYear", +e.target.value)
@@ -110,9 +111,8 @@ export default function PeriodSelector({
                                 ))}
                             </select>
 
-                            {/* From Month */}
                             <select
-                                className="form-select form-select-sm"
+                                className={selectClasses}
                                 value={p.fromMonth}
                                 onChange={(e) =>
                                     updatePeriod(p.id, "fromMonth", +e.target.value)
@@ -125,12 +125,10 @@ export default function PeriodSelector({
                                 ))}
                             </select>
 
-                            {/* Arrow */}
-                            <span className="period-arrow">→</span>
+                            <span className="text-gray-400 shrink-0 px-0.5">→</span>
 
-                            {/* To Year */}
                             <select
-                                className="form-select form-select-sm"
+                                className={selectClasses}
                                 value={p.toYear}
                                 onChange={(e) =>
                                     updatePeriod(p.id, "toYear", +e.target.value)
@@ -141,9 +139,8 @@ export default function PeriodSelector({
                                 ))}
                             </select>
 
-                            {/* To Month */}
                             <select
-                                className="form-select form-select-sm"
+                                className={selectClasses}
                                 value={p.toMonth}
                                 onChange={(e) =>
                                     updatePeriod(p.id, "toMonth", +e.target.value)
@@ -156,14 +153,13 @@ export default function PeriodSelector({
                                 ))}
                             </select>
 
-                            {/* Delete button */}
                             {periods.length > 1 && (
                                 <button
-                                    className="period-delete-btn"
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                                     onClick={() => removePeriod(p.id)}
                                     title="Xóa khoảng thời gian"
                                 >
-                                    🗑️
+                                    <Trash2 className="w-4 h-4" />
                                 </button>
                             )}
                         </div>
@@ -172,25 +168,28 @@ export default function PeriodSelector({
             </div>
 
             {/* Action buttons */}
-            <div className="period-actions">
+            <div className="flex items-center gap-3">
                 <button
-                    className="btn btn-secondary"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                     onClick={addPeriod}
                     disabled={periods.length >= 6}
                 >
-                    ➕ Thêm khoảng so sánh
+                    <Plus className="w-4 h-4" />
+                    Thêm khoảng so sánh
                 </button>
                 <button
-                    className="btn btn-primary"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 cursor-pointer"
                     onClick={onCompare}
                     disabled={loading || periods.length === 0}
                 >
                     {loading ? (
                         <>
-                            <span className="spinner" /> Đang tải...
+                            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
                         </>
                     ) : (
-                        "📊 So sánh"
+                        <>
+                            <BarChart3 className="w-4 h-4" /> So sánh
+                        </>
                     )}
                 </button>
             </div>

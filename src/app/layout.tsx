@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { PaletteProvider } from "@/components/ThemeProvider";
 import Sidebar from "@/components/layout/Sidebar";
 
 export const metadata: Metadata = {
@@ -14,12 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" data-theme="dark" suppressHydrationWarning>
-      <body>
-        <ThemeProvider>
+    <html lang="vi" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <PaletteProvider>
           <Sidebar />
           <main className="main-content">{children}</main>
-        </ThemeProvider>
+        </PaletteProvider>
       </body>
     </html>
   );

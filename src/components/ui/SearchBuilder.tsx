@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus, Trash2, Search, Loader2 } from "lucide-react";
+
 export interface SearchCondition {
     field: string;
     keyword: string;
@@ -52,14 +54,16 @@ export default function SearchBuilder({
         }
     };
 
+    const selectClasses = "rounded-lg border-gray-300 text-sm py-2 px-3 focus:border-primary-500 focus:ring-primary-500 w-[180px] shrink-0";
+    const inputClasses = "rounded-lg border-gray-300 text-sm py-2 px-3 focus:border-primary-500 focus:ring-primary-500 flex-1";
+
     return (
-        <div className="search-builder">
+        <div className="mb-3">
             {conditions.map((cond, i) => (
-                <div key={i} className="search-condition-row">
-                    {/* AND/OR operator (between conditions) */}
+                <div key={i} className="mb-2">
                     {i >= 1 && (
-                        <div className="search-operator">
-                            <label className="radio-label">
+                        <div className="flex gap-4 mb-1 pl-1">
+                            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 cursor-pointer">
                                 <input
                                     type="radio"
                                     name={`op-${i}`}
@@ -68,10 +72,11 @@ export default function SearchBuilder({
                                     onChange={() =>
                                         updateCondition(i, "operator", "AND")
                                     }
+                                    className="accent-primary-600"
                                 />
                                 AND
                             </label>
-                            <label className="radio-label">
+                            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 cursor-pointer">
                                 <input
                                     type="radio"
                                     name={`op-${i}`}
@@ -80,16 +85,16 @@ export default function SearchBuilder({
                                     onChange={() =>
                                         updateCondition(i, "operator", "OR")
                                     }
+                                    className="accent-primary-600"
                                 />
                                 OR
                             </label>
                         </div>
                     )}
 
-                    <div className="search-fields">
-                        {/* Field dropdown */}
+                    <div className="flex gap-2 items-center">
                         <select
-                            className="form-select"
+                            className={selectClasses}
                             value={cond.field}
                             onChange={(e) =>
                                 updateCondition(i, "field", e.target.value)
@@ -102,10 +107,9 @@ export default function SearchBuilder({
                             ))}
                         </select>
 
-                        {/* Keyword input */}
                         <input
                             type="search"
-                            className="form-input"
+                            className={inputClasses}
                             value={cond.keyword}
                             placeholder={`Tìm trong "${cond.field}"...`}
                             onChange={(e) =>
@@ -114,24 +118,23 @@ export default function SearchBuilder({
                             onKeyDown={handleKeyDown}
                         />
 
-                        {/* Action buttons */}
-                        <div className="search-actions">
+                        <div className="flex gap-1 shrink-0">
                             {i === conditions.length - 1 && (
                                 <button
-                                    className="btn btn-secondary btn-sm"
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors cursor-pointer"
                                     onClick={addCondition}
                                     title="Thêm điều kiện"
                                 >
-                                    ➕
+                                    <Plus className="w-4 h-4" />
                                 </button>
                             )}
                             {i >= 1 && (
                                 <button
-                                    className="btn btn-secondary btn-sm"
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                                     onClick={() => removeCondition(i)}
                                     title="Xóa điều kiện"
                                 >
-                                    🗑️
+                                    <Trash2 className="w-4 h-4" />
                                 </button>
                             )}
                         </div>
@@ -139,18 +142,20 @@ export default function SearchBuilder({
                 </div>
             ))}
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem" }}>
+            <div className="flex items-center gap-3 mt-3">
                 <button
-                    className="btn btn-primary"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 cursor-pointer"
                     onClick={onSearch}
                     disabled={loading}
                 >
                     {loading ? (
                         <>
-                            <span className="spinner" /> Đang tìm...
+                            <Loader2 className="w-4 h-4 animate-spin" /> Đang tìm...
                         </>
                     ) : (
-                        "🔍 Tìm kiếm"
+                        <>
+                            <Search className="w-4 h-4" /> Tìm kiếm
+                        </>
                     )}
                 </button>
                 {extraButtons}

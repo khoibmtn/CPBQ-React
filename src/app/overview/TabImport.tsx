@@ -1,4 +1,5 @@
 "use client";
+import { Loader2, Trash2 } from "lucide-react";
 
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -105,12 +106,7 @@ export default function TabImport() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const colMenuRef = useRef<HTMLDivElement>(null);
     const LS_KEY = "import_visible_cols";
-    const [colMode, setColMode] = useState<"all" | "custom">(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem(LS_KEY) ? "custom" : "all";
-        }
-        return "all";
-    });
+    const [colMode, setColMode] = useState<"all" | "custom">("custom");
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => {
         if (typeof window !== "undefined") {
             try {
@@ -118,7 +114,7 @@ export default function TabImport() {
                 if (saved) return new Set(JSON.parse(saved) as string[]);
             } catch { /* ignore */ }
         }
-        return new Set(ALL_COLS.map((c) => c.key));
+        return new Set(DEFAULT_VISIBLE_KEYS);
     });
     const [showColMenu, setShowColMenu] = useState(false);
 
@@ -497,7 +493,7 @@ export default function TabImport() {
     };
 
     return (
-        <div>
+        <div className="flex flex-col gap-6">
             <SectionTitle icon="📥">Import dữ liệu Excel lên BigQuery</SectionTitle>
 
             <InfoBanner type="info">
@@ -507,7 +503,7 @@ export default function TabImport() {
 
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
 
-            {/* File upload zone: only show drop zone when no file */}
+            {/* ── Drop zone: no file selected ── */}
             {!file && (
                 <div
                     className="file-upload-zone"
@@ -541,39 +537,28 @@ export default function TabImport() {
                 />
             )}
 
-            {/* File selected but not yet validated */}
+            {/* ── File selected, not yet validated ── */}
             {file && sheets.length === 0 && doneRows.size === 0 && (
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    padding: "0.5rem 1rem",
-                    background: "var(--card-bg)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    marginTop: "0.75rem",
-                }}>
-                    <span style={{ fontSize: "1.2rem" }}>📁</span>
-                    <span style={{ fontWeight: 600 }}>{file.name}</span>
-                    <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                        ({(file.size / 1024).toFixed(1)} KB)
-                    </span>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-3 flex-wrap">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm font-medium text-gray-700">
+                        <span>📁</span>
+                        <strong>{file.name}</strong>
+                        <span className="text-gray-400 text-xs">({(file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
                     <button
-                        className="btn btn-primary btn-sm"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 cursor-pointer"
                         onClick={handleValidate}
                         disabled={loading}
-                        style={{ marginLeft: "0.5rem" }}
                     >
                         {loading ? (
-                            <><span className="spinner" /> Đang kiểm tra...</>
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Đang kiểm tra...</>
                         ) : (
                             "🔍 Kiểm tra"
                         )}
                     </button>
                     <button
-                        className="btn btn-secondary btn-sm"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer ml-auto"
                         onClick={handleReset}
-                        style={{ marginLeft: "auto" }}
                         title="Hủy file"
                     >
                         ✕ Hủy
@@ -581,323 +566,263 @@ export default function TabImport() {
                 </div>
             )}
 
-            {/* ── Results ── */}
+            {/* ── Results after validation ── */}
             {sheets.length > 0 && (
-                <div style={{ marginTop: "1rem" }}>
-                    {/* File info + Sheet selector row */}
-                    <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                        marginBottom: "1rem",
-                        flexWrap: "wrap",
-                    }}>
-                        {/* File info box */}
-                        <div style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            padding: "0.45rem 1rem",
-                            background: "var(--accent-bg, rgba(59,130,246,0.08))",
-                            border: "1px solid var(--accent, #3b82f6)",
-                            borderRadius: 8,
-                            fontSize: "0.9rem",
-                        }}>
-                            <span>📁</span>
-                            <strong>{file!.name}</strong>
-                            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-                                ({(file!.size / 1024).toFixed(1)} KB)
-                            </span>
+                <div className="flex flex-col gap-4">
+
+                    {/* File info + Sheet selector — white card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            {/* Sheet selector / label */}
+                            {sheets.length > 1 ? (
+                                <select
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 text-sm font-medium text-green-700 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors focus:ring-primary-500 focus:border-primary-500 pr-8"
+                                    value={selectedSheet}
+                                    onChange={(e) => handleSheetChange(e.target.value)}
+                                >
+                                    {sheets.map((s) => (
+                                        <option key={s.sheetName} value={s.sheetName}>
+                                            📄 {s.sheetName} ({s.matchedCols} cột, {s.validRows.length} dòng)
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 text-sm font-medium text-green-700 border border-green-200">
+                                    📄 {sheets[0].sheetName}
+                                    <span className="opacity-75 text-xs font-normal">({sheets[0].matchedCols} cột, {sheets[0].validRows.length} dòng)</span>
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {/* File info badge */}
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-sm font-medium text-gray-700">
+                                <span>📁</span>
+                                {file!.name}
+                                <span className="text-gray-400 text-xs">({(file!.size / 1024).toFixed(1)} KB)</span>
+                                <button
+                                    className="hover:text-red-500 ml-0.5 transition-colors text-gray-400"
+                                    onClick={handleReset}
+                                    title="Hủy file, xóa dữ liệu"
+                                >
+                                    ✕
+                                </button>
+                            </div>
                             <button
-                                className="btn btn-secondary btn-sm"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors cursor-pointer"
                                 onClick={handleReset}
-                                style={{ marginLeft: "0.25rem", padding: "0.15rem 0.5rem", fontSize: "0.8rem" }}
-                                title="Hủy file, xóa dữ liệu"
+                                title="Hủy file, quay về trạng thái ban đầu"
                             >
-                                ✕ Hủy
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                                Hủy
                             </button>
                         </div>
-
-                        {/* Sheet selector */}
-                        {sheets.length > 1 && (
-                            <select
-                                className="form-select"
-                                value={selectedSheet}
-                                onChange={(e) => handleSheetChange(e.target.value)}
-                                style={{
-                                    fontWeight: 600,
-                                    fontSize: "0.9rem",
-                                    padding: "0.45rem 1rem",
-                                    background: "var(--success-bg, rgba(34,197,94,0.08))",
-                                    border: "1px solid var(--success, #22c55e)",
-                                    borderRadius: 8,
-                                }}
-                            >
-                                {sheets.map((s) => (
-                                    <option key={s.sheetName} value={s.sheetName}>
-                                        📄 {s.sheetName} ({s.matchedCols} cột, {s.validRows.length} dòng)
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                        {sheets.length === 1 && (
-                            <span style={{
-                                padding: "0.45rem 1rem",
-                                background: "var(--success-bg, rgba(34,197,94,0.08))",
-                                border: "1px solid var(--success, #22c55e)",
-                                borderRadius: 8,
-                                fontSize: "0.9rem",
-                                fontWeight: 600,
-                            }}>
-                                📄 {sheets[0].sheetName} ({sheets[0].matchedCols} cột, {sheets[0].validRows.length} dòng)
-                            </span>
-                        )}
                     </div>
 
-                    {/* Tabs: underlined tab navigation */}
-                    <div style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "1.5rem",
-                        borderBottom: "2px solid var(--border)",
-                        marginBottom: "0.75rem",
-                    }}>
-                        <button
-                            onClick={() => setSelectedTab("summary")}
-                            style={{
-                                background: "none",
-                                border: "none",
-                                padding: "0.5rem 0",
-                                cursor: "pointer",
-                                fontWeight: selectedTab === "summary" ? 700 : 400,
-                                color: selectedTab === "summary" ? "var(--accent)" : "var(--text-muted)",
-                                borderBottom: selectedTab === "summary" ? "2px solid var(--accent)" : "2px solid transparent",
-                                marginBottom: "-2px",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            📖 Tóm tắt
-                        </button>
-                        <button
-                            onClick={() => setSelectedTab("valid")}
-                            style={{
-                                background: "none",
-                                border: "none",
-                                padding: "0.5rem 0",
-                                cursor: "pointer",
-                                fontWeight: selectedTab === "valid" ? 700 : 400,
-                                color: selectedTab === "valid" ? "var(--accent)" : "var(--text-muted)",
-                                borderBottom: selectedTab === "valid" ? "2px solid var(--accent)" : "2px solid transparent",
-                                marginBottom: "-2px",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            ✅ Hợp lệ ({validCount})
-                        </button>
-                        <button
-                            onClick={() => setSelectedTab("duplicate")}
-                            style={{
-                                background: "none",
-                                border: "none",
-                                padding: "0.5rem 0",
-                                cursor: "pointer",
-                                fontWeight: selectedTab === "duplicate" ? 700 : 400,
-                                color: selectedTab === "duplicate" ? "var(--warning)" : "var(--text-muted)",
-                                borderBottom: selectedTab === "duplicate" ? "2px solid var(--warning)" : "2px solid transparent",
-                                marginBottom: "-2px",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            📋 Trùng lặp ({dupCount})
-                        </button>
+                    {/* Data card: tabs + table + footer */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
 
-                        {/* Search + Column Config + Delete — only for data tabs */}
-                        {selectedTab !== "summary" && (
-                            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                <input
-                                    type="search"
-                                    className="form-input"
-                                    placeholder="🔍 Tìm kiếm bản ghi..."
-                                    value={searchKeyword}
-                                    onChange={(e) => setSearchKeyword(e.target.value)}
-                                    style={{ maxWidth: 240, height: 36 }}
-                                />
+                        {/* Tab bar + toolbar */}
+                        <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            {/* Pill tabs */}
+                            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg self-start">
+                                <button
+                                    onClick={() => setSelectedTab("summary")}
+                                    className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${selectedTab === "summary"
+                                        ? "font-bold text-primary-600 bg-white shadow-sm"
+                                        : "font-medium text-gray-600 hover:text-gray-900"
+                                        }`}
+                                >
+                                    📖 Tóm tắt dữ liệu
+                                </button>
+                                <button
+                                    onClick={() => setSelectedTab("valid")}
+                                    className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${selectedTab === "valid"
+                                        ? "font-bold text-primary-600 bg-white shadow-sm"
+                                        : "font-medium text-gray-600 hover:text-gray-900"
+                                        }`}
+                                >
+                                    ✅ Hợp lệ ({validCount})
+                                </button>
+                                <button
+                                    onClick={() => setSelectedTab("duplicate")}
+                                    className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${selectedTab === "duplicate"
+                                        ? "font-bold text-amber-600 bg-white shadow-sm"
+                                        : "font-medium text-gray-600 hover:text-gray-900"
+                                        }`}
+                                >
+                                    📋 Trùng lặp ({dupCount})
+                                </button>
+                            </div>
 
-                                {/* Column visibility config */}
-                                <div ref={colMenuRef} style={{ position: "relative" }}>
-                                    <button
-                                        className="col-config-btn"
-                                        onClick={() => setShowColMenu((v) => !v)}
-                                        title="Cấu hình cột hiển thị"
-                                    >
-                                        ⚙️
-                                    </button>
-                                    {showColMenu && (
-                                        <div className="col-config-dropdown">
-                                            <div className="col-config-header">
-                                                <span>Hiển thị cột</span>
-                                                <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem" }}>
-                                                    <button
-                                                        className="col-config-action"
-                                                        style={{ fontWeight: colMode === "all" ? 700 : 400 }}
-                                                        onClick={() => {
-                                                            setVisibleCols(new Set(ALL_COLS.map((c) => c.key)));
-                                                            setColMode("all");
-                                                        }}
-                                                    >
-                                                        {colMode === "all" ? "✓ " : ""}Tất cả
-                                                    </button>
-                                                    <button
-                                                        className="col-config-action"
-                                                        style={{ fontWeight: colMode === "custom" ? 700 : 400 }}
-                                                        onClick={() => {
-                                                            // Load saved custom selection
-                                                            try {
-                                                                const saved = localStorage.getItem(LS_KEY);
-                                                                if (saved) {
-                                                                    setVisibleCols(new Set(JSON.parse(saved) as string[]));
-                                                                } else {
+                            {/* Search + Column Config + Delete (data tabs only) */}
+                            {selectedTab !== "summary" && (
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <div className="relative flex-1 sm:w-60">
+                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                                        <input
+                                            type="search"
+                                            className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-gray-50 text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                                            placeholder="Tìm kiếm bệnh nhân..."
+                                            value={searchKeyword}
+                                            onChange={(e) => setSearchKeyword(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Column visibility config */}
+                                    <div ref={colMenuRef} style={{ position: "relative" }}>
+                                        <button
+                                            className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                                            onClick={() => setShowColMenu((v) => !v)}
+                                            title="Cấu hình cột hiển thị"
+                                        >
+                                            ⚙️
+                                        </button>
+                                        {showColMenu && (
+                                            <div className="col-config-dropdown">
+                                                <div className="col-config-header">
+                                                    <span>Hiển thị cột</span>
+                                                    <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem" }}>
+                                                        <button
+                                                            className="col-config-action"
+                                                            style={{ fontWeight: colMode === "all" ? 700 : 400 }}
+                                                            onClick={() => {
+                                                                setVisibleCols(new Set(ALL_COLS.map((c) => c.key)));
+                                                                setColMode("all");
+                                                            }}
+                                                        >
+                                                            {colMode === "all" ? "✓ " : ""}Tất cả
+                                                        </button>
+                                                        <button
+                                                            className="col-config-action"
+                                                            style={{ fontWeight: colMode === "custom" ? 700 : 400 }}
+                                                            onClick={() => {
+                                                                try {
+                                                                    const saved = localStorage.getItem(LS_KEY);
+                                                                    if (saved) {
+                                                                        setVisibleCols(new Set(JSON.parse(saved) as string[]));
+                                                                    } else {
+                                                                        setVisibleCols(new Set(DEFAULT_VISIBLE_KEYS));
+                                                                    }
+                                                                } catch {
                                                                     setVisibleCols(new Set(DEFAULT_VISIBLE_KEYS));
                                                                 }
-                                                            } catch {
-                                                                setVisibleCols(new Set(DEFAULT_VISIBLE_KEYS));
-                                                            }
-                                                            setColMode("custom");
-                                                        }}
-                                                    >
-                                                        {colMode === "custom" ? "✓ " : ""}Tùy chỉnh
-                                                    </button>
+                                                                setColMode("custom");
+                                                            }}
+                                                        >
+                                                            {colMode === "custom" ? "✓ " : ""}Tùy chỉnh
+                                                        </button>
+                                                    </div>
                                                 </div>
+                                                {ALL_COLS.filter((c) => !PINNED_KEYS.has(c.key)).map((col) => (
+                                                    <label key={col.key} className="col-config-item">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={visibleCols.has(col.key)}
+                                                            onChange={() => toggleCol(col.key)}
+                                                        />
+                                                        {col.label}
+                                                    </label>
+                                                ))}
                                             </div>
-                                            {ALL_COLS.filter((c) => !PINNED_KEYS.has(c.key)).map((col) => (
-                                                <label key={col.key} className="col-config-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={visibleCols.has(col.key)}
-                                                        onChange={() => toggleCol(col.key)}
-                                                    />
-                                                    {col.label}
-                                                </label>
-                                            ))}
-                                        </div>
+                                        )}
+                                    </div>
+
+                                    {checkedInCurrentTab > 0 && (
+                                        <button
+                                            className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors cursor-pointer"
+                                            onClick={handleLocalDelete}
+                                            title={`Xóa ${checkedInCurrentTab} dòng đã chọn`}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     )}
                                 </div>
+                            )}
+                        </div>
 
-                                {checkedInCurrentTab > 0 && (
-                                    <button
-                                        className="btn btn-danger btn-sm"
-                                        onClick={handleLocalDelete}
-                                        style={{ whiteSpace: "nowrap", height: 36 }}
-                                    >
-                                        🗑️ Xóa ({checkedInCurrentTab})
-                                    </button>
-                                )}
+                        {selectedTab === "summary" && currentSheet && currentSheet.summary.length > 0 && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold tracking-wide border-b border-gray-200">
+                                            <th className="py-3 px-4 text-center">Kỳ</th>
+                                            <th className="py-3 px-4 text-center">Mã CSKCB</th>
+                                            <th className="py-3 px-4 text-right">Số dòng</th>
+                                            <th className="py-3 px-4 text-right">Tổng chi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-sm text-gray-700 divide-y divide-gray-100">
+                                        {currentSheet.summary.map((s, i) => (
+                                            <tr key={i} className={`hover:bg-gray-50 transition-colors ${i % 2 === 1 ? 'bg-gray-50/50' : ''}`}>
+                                                <td className="py-3 px-4 text-center font-medium">{s.period}</td>
+                                                <td className="py-3 px-4 text-center">{s.maCSKCB}</td>
+                                                <td className="py-3 px-4 text-right font-medium">{s.rows.toLocaleString()}</td>
+                                                <td className="py-3 px-4 text-right font-medium">{s.tongChi}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
-                    </div>
+                        {selectedTab === "summary" && currentSheet && currentSheet.summary.length === 0 && (
+                            <div className="px-5 py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
+                        )}
 
-                    {/* ── Tab content: Summary ── */}
-                    {selectedTab === "summary" && currentSheet && currentSheet.summary.length > 0 && (
-                        <div className="data-table-wrapper" style={{ marginBottom: "1rem" }}>
-                            <table className="data-table data-table-compact">
-                                <thead>
-                                    <tr>
-                                        <th style={{ textAlign: "center" }}>Kỳ</th>
-                                        <th style={{ textAlign: "center" }}>Mã CSKCB</th>
-                                        <th style={{ textAlign: "right" }}>Số dòng</th>
-                                        <th style={{ textAlign: "right" }}>Tổng chi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {currentSheet.summary.map((s, i) => (
-                                        <tr key={i} className={i % 2 === 0 ? "row-even" : "row-odd"}>
-                                            <td style={{ textAlign: "center" }}>{s.period}</td>
-                                            <td style={{ textAlign: "center" }}>{s.maCSKCB}</td>
-                                            <td className="right">{s.rows.toLocaleString()}</td>
-                                            <td className="right">{s.tongChi}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                    {selectedTab === "summary" && currentSheet && currentSheet.summary.length === 0 && (
-                        <div className="data-table-empty"><p>Không có dữ liệu tóm tắt</p></div>
-                    )}
+                        {/* ── Tab content: Data tables (valid / duplicate) ── */}
+                        {selectedTab !== "summary" && (
+                            <>
+                                <DataTable
+                                    columns={displayColumns}
+                                    data={filteredRows}
+                                    selectable
+                                    selectedRows={displaySelectedRows}
+                                    disabledRows={displayDisabledRows}
+                                    onSelectionChange={handleSelectionChange}
+                                    stickyHeader
+                                    rowClassName={getRowClassName}
+                                />
 
-                    {/* ── Tab content: Data tables (valid / duplicate) ── */}
-                    {selectedTab !== "summary" && (
-                        <>
-                            <DataTable
-                                columns={displayColumns}
-                                data={filteredRows}
-                                selectable
-                                selectedRows={displaySelectedRows}
-                                disabledRows={displayDisabledRows}
-                                onSelectionChange={handleSelectionChange}
-                                stickyHeader
-                                rowClassName={getRowClassName}
-                            />
+                                {/* Inline success message */}
+                                {uploadMsgs.get(`${selectedSheet}:${selectedTab}`) && (
+                                    <div className="mx-5 mb-4 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg text-green-700 font-semibold text-sm text-center">
+                                        {uploadMsgs.get(`${selectedSheet}:${selectedTab}`)}
+                                    </div>
+                                )}
 
-                            {/* Inline success message */}
-                            {uploadMsgs.get(`${selectedSheet}:${selectedTab}`) && (
-                                <div style={{
-                                    marginTop: "0.75rem",
-                                    padding: "0.5rem 1rem",
-                                    background: "var(--success-bg, rgba(34,197,94,0.08))",
-                                    border: "1px solid var(--success, #22c55e)",
-                                    borderRadius: 8,
-                                    color: "var(--success, #22c55e)",
-                                    fontWeight: 600,
-                                    fontSize: "0.9rem",
-                                    textAlign: "center",
-                                }}>
-                                    {uploadMsgs.get(`${selectedSheet}:${selectedTab}`)}
+                                {/* Sticky action bar */}
+                                <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-center gap-3 sticky bottom-0">
+                                    {selectedTab === "duplicate" && dupCount > 0 && (
+                                        <button
+                                            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-500/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                            onClick={() => handleUpload("overwrite")}
+                                            disabled={loading || checkedDupCount === 0}
+                                        >
+                                            {loading ? (
+                                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang ghi đè...</>
+                                            ) : (
+                                                `🔄 Xác nhận ghi đè (${checkedDupCount})`
+                                            )}
+                                        </button>
+                                    )}
+
+                                    {selectedTab === "valid" && (
+                                        <button
+                                            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold rounded-xl bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                            onClick={() => handleUpload("new")}
+                                            disabled={loading || checkedNewCount === 0}
+                                        >
+                                            {loading ? (
+                                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang tải lên...</>
+                                            ) : (
+                                                `☁️ Tải lên mới (${checkedNewCount})`
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
-                            )}
-
-                            {/* Action buttons: tab-conditional */}
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "center",
-                                    alignItems: "center",
-                                    gap: "0.75rem",
-                                    marginTop: "1rem",
-                                }}
-                            >
-                                {selectedTab === "duplicate" && dupCount > 0 && (
-                                    <button
-                                        className="btn btn-warning"
-                                        onClick={() => handleUpload("overwrite")}
-                                        disabled={loading || checkedDupCount === 0}
-                                        style={{ height: 44 }}
-                                    >
-                                        {loading ? (
-                                            <><span className="spinner" /> Đang ghi đè...</>
-                                        ) : (
-                                            `🔄 Xác nhận ghi đè (${checkedDupCount})`
-                                        )}
-                                    </button>
-                                )}
-
-                                {selectedTab === "valid" && (
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={() => handleUpload("new")}
-                                        disabled={loading || checkedNewCount === 0}
-                                        style={{ height: 44 }}
-                                    >
-                                        {loading ? (
-                                            <><span className="spinner" /> Đang tải lên...</>
-                                        ) : (
-                                            `☁️ Tải lên mới (${checkedNewCount})`
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-                        </>
-                    )}
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

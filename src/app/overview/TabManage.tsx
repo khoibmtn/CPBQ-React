@@ -1,4 +1,5 @@
 "use client";
+import { Loader2, Trash2 } from "lucide-react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
@@ -356,8 +357,8 @@ export default function TabManage() {
 
     if (initialLoading) {
         return (
-            <div className="loading-overlay">
-                <div className="spinner" /> Đang tải...
+            <div className="flex items-center gap-2 justify-center py-12 text-gray-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
             </div>
         );
     }
@@ -374,60 +375,67 @@ export default function TabManage() {
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
 
             {/* Year range + method selector */}
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", marginBottom: "0.5rem" }}>
-                <div style={{ flex: 1 }}>
-                    <label className="form-label">Năm bắt đầu</label>
-                    <select
-                        className="form-select"
-                        value={fromYear}
-                        onChange={(e) => setFromYear(+e.target.value)}
-                    >
-                        {years.map((y) => (
-                            <option key={y} value={y}>{y}</option>
-                        ))}
-                    </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                    <label className="form-label">Năm kết thúc</label>
-                    <select
-                        className="form-select"
-                        value={toYear}
-                        onChange={(e) => setToYear(+e.target.value)}
-                    >
-                        {years
-                            .filter((y) => y >= fromYear)
-                            .map((y) => (
+            <section className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm mb-4">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                            Năm bắt đầu
+                        </label>
+                        <select
+                            className="bg-transparent border-none text-sm font-semibold py-0 pl-0 pr-8 focus:ring-0 cursor-pointer"
+                            value={fromYear}
+                            onChange={(e) => setFromYear(+e.target.value)}
+                        >
+                            {years.map((y) => (
                                 <option key={y} value={y}>{y}</option>
                             ))}
-                    </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                    <label className="form-label">Phương pháp</label>
-                    <select
-                        className="form-select"
-                        value={method}
-                        onChange={(e) => setMethod(e.target.value)}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                            Năm kết thúc
+                        </label>
+                        <select
+                            className="bg-transparent border-none text-sm font-semibold py-0 pl-0 pr-8 focus:ring-0 cursor-pointer"
+                            value={toYear}
+                            onChange={(e) => setToYear(+e.target.value)}
+                        >
+                            {years
+                                .filter((y) => y >= fromYear)
+                                .map((y) => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                            Phương pháp
+                        </label>
+                        <select
+                            className="bg-transparent border-none text-sm font-semibold py-0 pl-0 pr-8 focus:ring-0 cursor-pointer"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value)}
+                        >
+                            <option value="🧠 Tự động">🧠 Tự động</option>
+                            <option value="💾 RAM">💾 RAM</option>
+                            <option value="☁️ BigQuery">☁️ BigQuery</option>
+                        </select>
+                    </div>
+                    <button
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={handleLoad}
+                        disabled={loading}
                     >
-                        <option value="🧠 Tự động">🧠 Tự động</option>
-                        <option value="💾 RAM">💾 RAM</option>
-                        <option value="☁️ BigQuery">☁️ BigQuery</option>
-                    </select>
+                        {loading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
+                            </>
+                        ) : (
+                            "📥 Tải dữ liệu"
+                        )}
+                    </button>
                 </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={handleLoad}
-                    disabled={loading}
-                    style={{ height: 40 }}
-                >
-                    {loading ? (
-                        <>
-                            <span className="spinner" /> Đang tải...
-                        </>
-                    ) : (
-                        "📥 Tải dữ liệu"
-                    )}
-                </button>
-            </div>
+            </section>
             {data !== null && (
                 <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
                     {actualMethod === "RAM" ? "💾" : "☁️"} Phương pháp:
@@ -461,13 +469,13 @@ export default function TabManage() {
                         />
                     </MetricGrid>
 
-                    <hr className="divider" />
+                    <hr className="border-gray-200 my-4" />
 
                     {/* Search */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <SectionTitle icon="🔍">Dữ liệu chi tiết</SectionTitle>
                         <button
-                            className="btn btn-secondary btn-sm"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                             onClick={handleExportExcel}
                             disabled={displayData.length === 0}
                             style={{ whiteSpace: "nowrap" }}
@@ -485,17 +493,17 @@ export default function TabManage() {
                         extraButtons={
                             selectedRows.size > 0 ? (
                                 <button
-                                    className="btn btn-danger"
+                                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                                     onClick={() => setShowDeleteConfirm(true)}
                                     disabled={deleteLoading}
                                     style={{ height: 40 }}
                                 >
                                     {deleteLoading ? (
                                         <>
-                                            <span className="spinner" /> Đang xóa...
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Đang xóa...
                                         </>
                                     ) : (
-                                        `🗑️ Xóa ${selectedRows.size} dòng đã chọn`
+                                        <><Trash2 className="w-4 h-4" /> Xóa {selectedRows.size} dòng đã chọn</>
                                     )}
                                 </button>
                             ) : undefined

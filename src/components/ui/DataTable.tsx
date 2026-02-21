@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface Column {
     key: string;
@@ -43,11 +44,9 @@ export default function DataTable({
 
     const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
 
-    // Reset page if out of bounds
     const safePage = Math.min(currentPage, totalPages - 1);
     if (safePage !== currentPage) setCurrentPage(safePage);
 
-    // Keep page input in sync with current page
     useEffect(() => {
         setPageInputValue(String(safePage + 1));
     }, [safePage]);
@@ -59,7 +58,6 @@ export default function DataTable({
         [data, startIdx, endIdx]
     );
 
-    // Selectable rows on this page (excluding disabled)
     const selectablePageIndices = useMemo(() => {
         const indices: number[] = [];
         for (let i = startIdx; i < endIdx; i++) {
@@ -102,7 +100,7 @@ export default function DataTable({
 
     if (data.length === 0) {
         return (
-            <div className="data-table-empty">
+            <div className="text-center py-8 text-gray-400 text-sm">
                 <p>{emptyMessage}</p>
             </div>
         );
@@ -111,23 +109,28 @@ export default function DataTable({
     return (
         <div className="data-table-container">
             <div className={`data-table-wrapper ${stickyHeader ? "sticky-header" : ""}`}>
-                <table className="data-table data-table-compact">
+                <table className="data-table data-table-compact w-full text-sm border-collapse">
                     <thead>
                         <tr>
                             {selectable && (
-                                <th style={{ width: 40, textAlign: "center" }}>
+                                <th className="w-10 text-center border px-2 py-2" style={{ background: 'var(--color-primary-200)', borderColor: 'var(--color-primary-300)' }}>
                                     <input
                                         type="checkbox"
                                         checked={allPageSelected}
                                         onChange={handleSelectAll}
                                         title="Chọn tất cả trang này"
+                                        className="accent-primary-600"
                                     />
                                 </th>
                             )}
                             {columns.map((col) => (
                                 <th
                                     key={col.key}
+                                    className="font-semibold text-xs uppercase tracking-wider border px-2.5 py-2"
                                     style={{
+                                        background: 'var(--color-primary-200)',
+                                        color: 'var(--color-primary-900)',
+                                        borderColor: 'var(--color-primary-300)',
                                         textAlign: col.align || "left",
                                         width: col.width,
                                     }}
@@ -146,10 +149,15 @@ export default function DataTable({
                             return (
                                 <tr
                                     key={globalIdx}
-                                    className={`${localIdx % 2 === 0 ? "row-even" : "row-odd"} ${isSelected ? "row-selected" : ""} ${extraClass}`}
+                                    className={`
+                                        ${localIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                                        ${isSelected ? "row-selected" : ""}
+                                        ${extraClass}
+                                        hover:bg-gray-50 transition-colors
+                                    `}
                                 >
                                     {selectable && (
-                                        <td style={{ textAlign: "center" }}>
+                                        <td className="text-center border border-gray-100 px-2 py-1.5">
                                             <input
                                                 type="checkbox"
                                                 checked={!!isSelected}
@@ -157,6 +165,7 @@ export default function DataTable({
                                                 onChange={() =>
                                                     handleSelectRow(globalIdx)
                                                 }
+                                                className="accent-primary-600"
                                             />
                                         </td>
                                     )}
@@ -165,6 +174,7 @@ export default function DataTable({
                                         return (
                                             <td
                                                 key={col.key}
+                                                className="border border-gray-100 px-2.5 py-1.5 text-gray-700"
                                                 style={{
                                                     textAlign:
                                                         col.align || "left",
@@ -188,15 +198,15 @@ export default function DataTable({
             </div>
 
             {/* Pagination */}
-            <div className="pagination-bar">
-                <div className="pagination-size" style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Hiển thị</span>
+            <div className="flex items-center gap-4 px-3 py-2 mt-2 rounded-lg bg-white border border-gray-200 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <span>Hiển thị</span>
                     <select
                         value={pageSize}
                         onChange={(e) =>
                             handlePageSizeChange(+e.target.value)
                         }
-                        className="form-select form-select-sm"
+                        className="rounded-md border-gray-300 text-xs py-1 pl-1.5 pr-7 focus:border-primary-500 focus:ring-primary-500"
                     >
                         {pageSizeOptions.map((s) => (
                             <option key={s} value={s}>
@@ -206,20 +216,20 @@ export default function DataTable({
                     </select>
                 </div>
 
-                <div className="pagination-nav">
+                <div className="flex items-center gap-2">
                     <button
-                        className="btn btn-secondary btn-sm"
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors cursor-pointer"
                         onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
                         disabled={safePage === 0}
                     >
-                        ◀
+                        <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className="pagination-info" style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                    <span className="flex items-center gap-1">
                         Trang{" "}
                         <input
                             type="text"
                             inputMode="numeric"
-                            className="pagination-page-input"
+                            className="w-8 text-center py-0.5 px-1 border border-gray-300 rounded text-xs font-bold focus:border-primary-500 focus:ring-primary-500"
                             value={pageInputValue}
                             onChange={(e) => {
                                 const raw = e.target.value.replace(/\D/g, "");
@@ -240,7 +250,7 @@ export default function DataTable({
                         {" "}/ {totalPages}
                     </span>
                     <button
-                        className="btn btn-secondary btn-sm"
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors cursor-pointer"
                         onClick={() =>
                             setCurrentPage((p) =>
                                 Math.min(totalPages - 1, p + 1)
@@ -248,14 +258,14 @@ export default function DataTable({
                         }
                         disabled={safePage >= totalPages - 1}
                     >
-                        ▶
+                        <ChevronRight className="w-4 h-4" />
                     </button>
                 </div>
 
-                <div className="pagination-summary">
+                <div className="ml-auto whitespace-nowrap text-gray-400 text-[11px]">
                     {startIdx + 1}–{endIdx} / {data.length.toLocaleString()} dòng
                     {selectable && selectedRows && selectedRows.size > 0 && (
-                        <span className="pagination-selected">
+                        <span className="text-primary-600 font-semibold">
                             {" · "}Đã chọn <strong>{selectedRows.size}</strong>
                         </span>
                     )}
