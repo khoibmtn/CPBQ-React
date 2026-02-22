@@ -6,6 +6,7 @@ import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { SCHEMA_COLS } from "@/lib/schema";
+import { readExcelFile, detectCompatibleSheets, extractSheetRows, type Row } from "@/lib/excelParser";
 
 /* ── Types ── */
 
@@ -105,6 +106,8 @@ export default function TabImport() {
     const sheetRemovedRows = useRef<Map<string, Set<number>>>(new Map());
     const fileInputRef = useRef<HTMLInputElement>(null);
     const colMenuRef = useRef<HTMLDivElement>(null);
+    // Cache parsed Excel rows per sheet (avoid re-reading file on upload)
+    const parsedSheetRows = useRef<Map<string, Row[]>>(new Map());
     const LS_KEY = "import_visible_cols";
     const [colMode, setColMode] = useState<"all" | "custom">("custom");
     const [visibleCols, setVisibleCols] = useState<Set<string>>(() => {
@@ -159,6 +162,7 @@ export default function TabImport() {
             sheetDoneMode.current.clear();
             sheetCheckedRows.current.clear();
             sheetRemovedRows.current.clear();
+            parsedSheetRows.current.clear();
         }
     };
 
@@ -179,6 +183,7 @@ export default function TabImport() {
             sheetDoneMode.current.clear();
             sheetCheckedRows.current.clear();
             sheetRemovedRows.current.clear();
+            parsedSheetRows.current.clear();
         }
     };
 
@@ -190,12 +195,25 @@ export default function TabImport() {
         setSheets([]);
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
+            // ── Parse Excel on the client (avoids Vercel 4.5 MB body limit) ──
+            const workbook = await readExcelFile(file);
+            const compatible = detectCompatibleSheets(workbook);
+            if (compatible.length === 0) {
+                throw new Error("Không tìm thấy sheet nào có đủ 14 cột bắt buộc.");
+            }
 
+            // Extract rows for each compatible sheet
+            const sheetsPayload = compatible.map((s) => {
+                const rows = extractSheetRows(workbook, s.sheetName);
+                parsedSheetRows.current.set(s.sheetName, rows);
+                return { name: s.sheetName, rows };
+            });
+
+            // Send lightweight JSON (not the 6 MB binary file)
             const res = await fetch("/api/bq/overview/import", {
                 method: "POST",
-                body: formData,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fileName: file.name, sheets: sheetsPayload }),
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
@@ -242,24 +260,22 @@ export default function TabImport() {
         }
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("sheet", selectedSheet);
-            formData.append("rowIndices", JSON.stringify(rowIndices));
-            formData.append("mode", mode);
+            // ── Send JSON rows instead of re-uploading the file ──
+            const sheetRows = parsedSheetRows.current.get(selectedSheet) || [];
 
             const res = await fetch("/api/bq/overview/import", {
                 method: "PUT",
-                body: formData,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    rows: sheetRows,
+                    rowIndices,
+                    mode,
+                }),
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
             // Mark uploaded rows as done
-            const uploadedOriginalIndices = activeRows.map((_, idx) => {
-                const row = activeRows[idx];
-                return currentSheet.validRows.indexOf(row);
-            }).filter(i => i >= 0);
-            // Use the original row indices from checked
             const doneIndices = currentSheet.validRows
                 .map((row, i) => ({ row, i }))
                 .filter(({ i }) => !removedRows.has(i) && checkedRows.has(i) &&

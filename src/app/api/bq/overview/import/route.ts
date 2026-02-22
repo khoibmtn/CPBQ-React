@@ -10,37 +10,28 @@ import {
     LOOKUP_LOAIKCB_TABLE,
 } from "@/lib/config";
 import { REQUIRED_COLS, SCHEMA_COLS, ROW_KEY_COLS } from "@/lib/schema";
-import * as XLSX from "xlsx";
+
+/* ── Route config: BigQuery calls can be slow ── */
+export const maxDuration = 60;
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    POST /api/bq/overview/import
-   Body: FormData with file + optional sheet name
+   Body: JSON { fileName, sheets: [{ name, rows }] }
+   (Excel is now parsed on the client to avoid Vercel's 4.5 MB body limit)
    Returns: validation results (sheets, valid/invalid counts, summary, duplicates)
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export async function POST(request: Request) {
     try {
-        const formData = await request.formData();
-        const file = formData.get("file") as File | null;
+        const body = await request.json();
+        const fileName: string = body.fileName || "upload.xlsx";
+        const sheetsInput: { name: string; rows: Row[] }[] = body.sheets || [];
 
-        if (!file) {
+        if (!sheetsInput.length) {
             return NextResponse.json(
-                { error: "Không tìm thấy file." },
+                { error: "Không tìm thấy sheet nào có đủ cột bắt buộc." },
                 { status: 400 }
             );
-        }
-
-        // Read Excel file
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-
-        // ── Sheet detection ──
-        const compatibleSheets = detectCompatibleSheets(workbook);
-        if (compatibleSheets.length === 0) {
-            return NextResponse.json({
-                error: "Không tìm thấy sheet nào có đủ 14 cột bắt buộc.",
-                sheets: [],
-            });
         }
 
         // Process ALL compatible sheets
@@ -56,15 +47,11 @@ export async function POST(request: Request) {
             summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
         }[] = [];
 
-        for (const sheetInfo of compatibleSheets) {
-            const sheetData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-                workbook.Sheets[sheetInfo.sheetName],
-                { defval: null }
-            );
-            if (sheetData.length === 0) continue;
+        for (const sheetInput of sheetsInput) {
+            if (!sheetInput.rows || sheetInput.rows.length === 0) continue;
 
             // Transform + validate
-            const transformed = transformRows(sheetData, file.name);
+            const transformed = transformRows(sheetInput.rows, fileName);
             const { valid, invalid, issues } = validateRows(transformed);
             const summary = buildSummary(valid);
 
@@ -86,9 +73,17 @@ export async function POST(request: Request) {
                 return display;
             });
 
+            // Count matched columns
+            const colsInRows = sheetInput.rows.length > 0
+                ? Object.keys(sheetInput.rows[0])
+                : [];
+            const matchedCount = SCHEMA_COLS.filter((c) =>
+                colsInRows.includes(c)
+            ).length;
+
             sheetsData.push({
-                sheetName: sheetInfo.sheetName,
-                matchedCols: sheetInfo.matchedCols.length,
+                sheetName: sheetInput.name,
+                matchedCols: matchedCount,
                 validRows: displayRows,
                 invalidCount: invalid.length,
                 dupCount: dupIndices.size,
@@ -107,35 +102,29 @@ export async function POST(request: Request) {
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    PUT /api/bq/overview/import
-   Body: FormData with file + sheet + rowIndices (JSON array) + mode ("new" | "overwrite")
+   Body: JSON { fileName, sheet, rows, rowIndices, mode }
+   (Excel is now parsed on the client to avoid Vercel's 4.5 MB body limit)
    - mode="new": Upload only non-duplicate rows
    - mode="overwrite": DELETE old duplicates first, then INSERT new versions
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export async function PUT(request: Request) {
     try {
-        const formData = await request.formData();
-        const file = formData.get("file") as File | null;
-        const sheetName = formData.get("sheet") as string | null;
-        const rowIndicesStr = formData.get("rowIndices") as string | null;
-        const mode = (formData.get("mode") as string) || "new";
+        const body = await request.json();
+        const fileName: string = body.fileName || "upload.xlsx";
+        const sheetRows: Row[] = body.rows || [];
+        const rowIndicesArr: number[] | null = body.rowIndices || null;
+        const mode: string = body.mode || "new";
 
-        if (!file || !sheetName) {
+        if (!sheetRows.length) {
             return NextResponse.json(
-                { error: "Missing file or sheet name." },
+                { error: "Missing rows." },
                 { status: 400 }
             );
         }
 
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        const sheetData = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-            workbook.Sheets[sheetName],
-            { defval: null }
-        );
-
         // Transform + validate
-        const transformed = transformRows(sheetData, file.name);
+        const transformed = transformRows(sheetRows, fileName);
         const { valid } = validateRows(transformed);
 
         if (valid.length === 0) {
@@ -144,13 +133,12 @@ export async function PUT(request: Request) {
 
         // Filter by selected row indices if provided
         let selectedRows = valid;
-        if (rowIndicesStr) {
+        if (rowIndicesArr) {
             try {
-                const indices: number[] = JSON.parse(rowIndicesStr);
-                const indexSet = new Set(indices);
+                const indexSet = new Set(rowIndicesArr);
                 selectedRows = valid.filter((_, i) => indexSet.has(i));
             } catch {
-                // Invalid JSON — use all valid rows
+                // Invalid — use all valid rows
             }
         }
 
@@ -222,55 +210,6 @@ export async function PUT(request: Request) {
    HELPER FUNCTIONS
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-interface SheetInfo {
-    sheetName: string;
-    matchedCols: string[];
-    extraCols: string[];
-}
-
-function detectCompatibleSheets(workbook: XLSX.WorkBook): SheetInfo[] {
-    const compatible: SheetInfo[] = [];
-
-    for (const sheetName of workbook.SheetNames) {
-        try {
-            const sheet = workbook.Sheets[sheetName];
-            if (!sheet) continue;
-
-            // Read only headers (first row)
-            const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-                sheet,
-                { defval: null }
-            );
-            if (data.length === 0) continue;
-
-            const colsLower = Object.keys(data[0]).map((c) =>
-                c.toLowerCase().trim()
-            );
-            const matched = SCHEMA_COLS.filter((c) =>
-                colsLower.includes(c)
-            );
-            const extra = colsLower.filter(
-                (c) => !(SCHEMA_COLS as readonly string[]).includes(c)
-            );
-            const missingRequired = (REQUIRED_COLS as readonly string[]).filter(
-                (c) => !colsLower.includes(c)
-            );
-
-            if (missingRequired.length === 0) {
-                compatible.push({
-                    sheetName,
-                    matchedCols: matched as string[],
-                    extraCols: extra,
-                });
-            }
-        } catch {
-            continue;
-        }
-    }
-
-    return compatible;
-}
-
 type Row = Record<string, unknown>;
 
 function transformRows(rows: Row[], sourceFileName: string): Row[] {
@@ -279,7 +218,8 @@ function transformRows(rows: Row[], sourceFileName: string): Row[] {
     return rows.map((row) => {
         const r: Row = {};
 
-        // Normalize column names
+        // Normalize column names (rows already have lowercase keys from client,
+        // but normalize again for safety)
         for (const [key, val] of Object.entries(row)) {
             r[key.toLowerCase().trim()] = val;
         }
@@ -529,57 +469,6 @@ function bqScalar(val: unknown): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function checkDuplicateCount(client: any, rows: Row[]): Promise<number> {
-    const maBnList = [
-        ...new Set(
-            rows
-                .map((r) => r.ma_bn)
-                .filter(Boolean)
-                .map(String)
-        ),
-    ];
-    if (maBnList.length === 0) return 0;
-
-    const keyCols = ROW_KEY_COLS.join(", ");
-    const BATCH_SIZE = 5000;
-    let totalDups = 0;
-
-    for (let i = 0; i < maBnList.length; i += BATCH_SIZE) {
-        const batch = maBnList.slice(i, i + BATCH_SIZE);
-        const inList = batch.map((m) => `'${m.replace(/'/g, "\\'")}'`).join(", ");
-        const query = `SELECT ${keyCols} FROM \`${FULL_TABLE_ID}\` WHERE ma_bn IN (${inList})`;
-
-        try {
-            const [job] = await client.createQueryJob({ query });
-            const [bqRows] = await job.getQueryResults();
-
-            if (bqRows.length === 0) continue;
-
-            // Build set of BQ key tuples
-            const bqKeys = new Set(
-                bqRows.map((bqRow: Row) =>
-                    ROW_KEY_COLS.map((c) => bqScalar(bqRow[c])).join("|")
-                )
-            );
-
-            // Check rows against BQ keys
-            for (const row of rows) {
-                const rowKey = ROW_KEY_COLS.map((c) =>
-                    bqScalar(row[c])
-                ).join("|");
-                if (bqKeys.has(rowKey)) {
-                    totalDups++;
-                }
-            }
-        } catch {
-            // Skip batch errors
-        }
-    }
-
-    return totalDups;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number>> {
     const dupIndices = new Set<number>();
     const maBnList = [
@@ -622,61 +511,6 @@ async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number
     }
 
     return dupIndices;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function checkLookupCodes(client: any, rows: Row[]): Promise<string[]> {
-    const warnings: string[] = [];
-
-    // Check ma_cskcb
-    try {
-        const cskcbTable = getFullTableId(LOOKUP_CSKCB_TABLE);
-        const query = `SELECT DISTINCT CAST(ma_cskcb AS STRING) AS ma_cskcb FROM \`${cskcbTable}\``;
-        const [job] = await client.createQueryJob({ query });
-        const [bqRows] = await job.getQueryResults();
-        const knownCskcb = new Set(bqRows.map((r: Row) => String(r.ma_cskcb)));
-
-        const uploadCskcb = new Set(
-            rows.map((r) => String(r.ma_cskcb)).filter(Boolean)
-        );
-        const missing = [...uploadCskcb].filter((c) => !knownCskcb.has(c));
-        if (missing.length > 0) {
-            warnings.push(
-                `Mã CSKCB chưa có trong danh mục: ${missing.sort().join(", ")}`
-            );
-        }
-    } catch {
-        // Skip
-    }
-
-    // Check ma_loaikcb
-    try {
-        const loaikcbTable = getFullTableId(LOOKUP_LOAIKCB_TABLE);
-        const query = `SELECT DISTINCT ma_loaikcb FROM \`${loaikcbTable}\``;
-        const [job] = await client.createQueryJob({ query });
-        const [bqRows] = await job.getQueryResults();
-        const knownLoaikcb = new Set(
-            bqRows.map((r: Row) => Number(r.ma_loaikcb))
-        );
-
-        const uploadLoaikcb = new Set(
-            rows
-                .map((r) => Number(r.ma_loaikcb))
-                .filter((n) => !isNaN(n))
-        );
-        const missing = [...uploadLoaikcb].filter(
-            (c) => !knownLoaikcb.has(c)
-        );
-        if (missing.length > 0) {
-            warnings.push(
-                `Mã loại KCB chưa có trong danh mục: ${missing.sort().join(", ")}`
-            );
-        }
-    } catch {
-        // Skip
-    }
-
-    return warnings;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
