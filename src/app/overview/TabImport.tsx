@@ -84,6 +84,31 @@ const DEFAULT_VISIBLE_KEYS = new Set([
     "ngay_vao", "ngay_ra", "t_tongchi", "t_bhtt", "_status",
 ]);
 
+/* ── Lookup types ── */
+
+interface LoaiKCBEntry {
+    ma_loaikcb: number;
+    ml2: string;
+}
+
+interface CskcbEntry {
+    ma_cskcb: string;
+    ten_cskcb: string;
+}
+
+interface CskcbInfo {
+    ma: string;
+    ten: string;
+}
+
+interface PivotSummary {
+    ngoaiCskcb: CskcbInfo[];
+    noiCskcb: CskcbInfo[];
+    pivotRows: Record<string, number | string>[];
+    grandNgoai: number;
+    grandNoi: number;
+}
+
 export default function TabImport() {
     const [file, setFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
@@ -98,6 +123,10 @@ export default function TabImport() {
     const [uploadMsgs, setUploadMsgs] = useState<Map<string, string>>(new Map());
     // Tracks rows that have been successfully uploaded/overwritten (by original index)
     const [doneRows, setDoneRows] = useState<Set<number>>(new Set());
+
+    // Lookup tables for pivot summary
+    const [loaiKCBMap, setLoaiKCBMap] = useState<Map<number, string>>(new Map());
+    const [cskcbMap, setCskcbMap] = useState<Map<string, string>>(new Map());
     const [doneMode, setDoneMode] = useState<Record<number, "new" | "overwrite">>({});
     // Per-sheet state caches (survive sheet switches)
     const sheetDoneRows = useRef<Map<string, Set<number>>>(new Map());
@@ -133,6 +162,25 @@ export default function TabImport() {
         return () => document.removeEventListener("mousedown", handler);
     }, [showColMenu]);
 
+    // Fetch lookup tables on mount
+    useEffect(() => {
+        Promise.all([
+            fetch("/api/bq/lookup?table=lookup_loaikcb").then((r) => r.json()),
+            fetch("/api/bq/lookup?table=lookup_cskcb").then((r) => r.json()),
+        ]).then(([loaiRes, cskcbRes]) => {
+            if (loaiRes.data) {
+                const map = new Map<number, string>();
+                (loaiRes.data as LoaiKCBEntry[]).forEach((r) => map.set(Number(r.ma_loaikcb), r.ml2));
+                setLoaiKCBMap(map);
+            }
+            if (cskcbRes.data) {
+                const map = new Map<string, string>();
+                (cskcbRes.data as CskcbEntry[]).forEach((r) => map.set(String(r.ma_cskcb), r.ten_cskcb));
+                setCskcbMap(map);
+            }
+        }).catch(() => { /* ignore lookup errors */ });
+    }, []);
+
     const toggleCol = useCallback((key: string) => {
         setVisibleCols((prev) => {
             const next = new Set(prev);
@@ -144,6 +192,80 @@ export default function TabImport() {
         });
         setColMode("custom");
     }, []);
+
+    /* ── Build pivot summary from valid rows ── */
+    const buildPivotSummary = useCallback((rows: Row[]): PivotSummary | null => {
+        if (rows.length === 0) return null;
+
+        // Classify rows into ngoại trú / nội trú using lookup
+        const ngoaiRows: Row[] = [];
+        const noiRows: Row[] = [];
+        for (const row of rows) {
+            const ml = Number(row.ma_loaikcb);
+            const ml2 = loaiKCBMap.get(ml) || (ml === 1 ? "Nội trú" : "Ngoại trú");
+            if (ml2 === "Nội trú") noiRows.push(row);
+            else ngoaiRows.push(row);
+        }
+
+        // Get unique CSKCB facilities
+        const getUniqueCskcb = (rowSet: Row[]): CskcbInfo[] => {
+            const map = new Map<string, string>();
+            for (const r of rowSet) {
+                const ma = String(r.ma_cskcb || "");
+                if (ma && !map.has(ma)) {
+                    map.set(ma, cskcbMap.get(ma) || ma);
+                }
+            }
+            return Array.from(map.entries())
+                .map(([ma, ten]) => ({ ma, ten }))
+                .sort((a, b) => a.ma.localeCompare(b.ma));
+        };
+
+        const ngoaiCskcb = getUniqueCskcb(ngoaiRows);
+        const noiCskcb = getUniqueCskcb(noiRows);
+
+        // Get unique periods (thang_qt values)
+        const periods = [...new Set(rows.map((r) => Number(r.thang_qt) || 0))]
+            .filter((t) => t > 0)
+            .sort((a, b) => a - b);
+
+        // Build pivot rows
+        const pivotRows: Record<string, number | string>[] = [];
+        let grandNgoai = 0, grandNoi = 0;
+
+        for (const thang of periods) {
+            const row: Record<string, number | string> = {
+                thang: `Tháng ${String(thang).padStart(2, "0")}`,
+            };
+
+            let tongNgoai = 0;
+            for (const cskcb of ngoaiCskcb) {
+                const count = ngoaiRows.filter(
+                    (r) => Number(r.thang_qt) === thang && String(r.ma_cskcb) === cskcb.ma
+                ).length;
+                row[`ngoai_${cskcb.ma}`] = count;
+                tongNgoai += count;
+            }
+            row["ngoai_tong"] = tongNgoai;
+            grandNgoai += tongNgoai;
+
+            let tongNoi = 0;
+            for (const cskcb of noiCskcb) {
+                const count = noiRows.filter(
+                    (r) => Number(r.thang_qt) === thang && String(r.ma_cskcb) === cskcb.ma
+                ).length;
+                row[`noi_${cskcb.ma}`] = count;
+                tongNoi += count;
+            }
+            row["noi_tong"] = tongNoi;
+            grandNoi += tongNoi;
+
+            row["tong_cong"] = tongNgoai + tongNoi;
+            pivotRows.push(row);
+        }
+
+        return { ngoaiCskcb, noiCskcb, pivotRows, grandNgoai, grandNoi };
+    }, [loaiKCBMap, cskcbMap]);
 
     /* ── File handling ── */
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -803,33 +925,136 @@ export default function TabImport() {
                             )}
                         </div>
 
-                        {selectedTab === "summary" && currentSheet && currentSheet.summary.length > 0 && (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold tracking-wide border-b border-gray-200">
-                                            <th className="py-3 px-4 text-center">Kỳ</th>
-                                            <th className="py-3 px-4 text-center">Mã CSKCB</th>
-                                            <th className="py-3 px-4 text-right">Số dòng</th>
-                                            <th className="py-3 px-4 text-right">Tổng chi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-sm text-gray-700 divide-y divide-gray-100">
-                                        {currentSheet.summary.map((s, i) => (
-                                            <tr key={i} className={`hover:bg-gray-50 transition-colors ${i % 2 === 1 ? 'bg-gray-50/50' : ''}`}>
-                                                <td className="py-3 px-4 text-center font-medium">{s.period}</td>
-                                                <td className="py-3 px-4 text-center">{s.maCSKCB}</td>
-                                                <td className="py-3 px-4 text-right font-medium">{s.rows.toLocaleString()}</td>
-                                                <td className="py-3 px-4 text-right font-medium">{s.tongChi}</td>
+                        {selectedTab === "summary" && currentSheet && (() => {
+                            const pivot = buildPivotSummary(currentSheet.validRows);
+                            if (!pivot) return (
+                                <div className="px-5 py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
+                            );
+                            const fmtNum = (v: number) => v === 0 ? "" : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
+                            return (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                        <thead>
+                                            {/* Row 1: Group headers */}
+                                            <tr className="bg-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
+                                                <th className="p-3 text-left border border-gray-200 bg-slate-200 sticky left-0 z-10 text-slate-700">
+                                                    Tháng
+                                                </th>
+                                                {pivot.ngoaiCskcb.length > 0 && (
+                                                    <th className="p-2 border border-gray-200 text-blue-700 bg-blue-50/80" colSpan={pivot.ngoaiCskcb.length + 1}>
+                                                        Ngoại trú
+                                                    </th>
+                                                )}
+                                                {pivot.noiCskcb.length > 0 && (
+                                                    <th className="p-2 border border-gray-200 text-orange-700 bg-orange-50/80" colSpan={pivot.noiCskcb.length + 1}>
+                                                        Nội trú
+                                                    </th>
+                                                )}
+                                                <th className="p-3 border border-gray-200 text-slate-900 bg-slate-200 min-w-[100px]">
+                                                    Tổng cộng
+                                                </th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                        {selectedTab === "summary" && currentSheet && currentSheet.summary.length === 0 && (
-                            <div className="px-5 py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
-                        )}
+                                            {/* Row 2: Sub-headers */}
+                                            <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-tight text-right text-slate-600">
+                                                <th className="p-3 border border-gray-200 text-left sticky left-0 bg-slate-50 shadow-[1px_0_0_0_#e5e7eb]">
+                                                    Cơ sở KCB
+                                                </th>
+                                                {pivot.ngoaiCskcb.map((c) => (
+                                                    <th key={`h-ngoai-${c.ma}`} className="p-2 border border-gray-200">{c.ten}</th>
+                                                ))}
+                                                {pivot.ngoaiCskcb.length > 0 && (
+                                                    <th className="p-2 border border-gray-200 bg-blue-100/50 text-blue-700">Tổng</th>
+                                                )}
+                                                {pivot.noiCskcb.map((c) => (
+                                                    <th key={`h-noi-${c.ma}`} className="p-2 border border-gray-200">{c.ten}</th>
+                                                ))}
+                                                {pivot.noiCskcb.length > 0 && (
+                                                    <th className="p-2 border border-gray-200 bg-orange-100/50 text-orange-700">Tổng</th>
+                                                )}
+                                                <th className="p-2 border border-gray-200 text-slate-800 bg-slate-100/50">Toàn viện</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-sm">
+                                            {pivot.pivotRows.map((row, idx) => {
+                                                const isEven = idx % 2 === 0;
+                                                const bgClass = isEven ? "bg-white" : "bg-slate-50/40";
+                                                const stickyBg = isEven ? "bg-white" : "bg-[#f9fafb]";
+                                                return (
+                                                    <tr key={idx} className={`${bgClass} hover:bg-slate-50 transition-colors`}>
+                                                        <td className={`p-3 px-4 text-left font-semibold text-slate-700 sticky left-0 ${stickyBg} border border-gray-200 shadow-[1px_0_0_0_#e5e7eb]`}>
+                                                            {row.thang}
+                                                        </td>
+                                                        {pivot.ngoaiCskcb.map((c) => (
+                                                            <td key={`ngoai-${c.ma}`} className="p-3 text-right text-slate-600 border border-gray-200">
+                                                                {fmtNum(row[`ngoai_${c.ma}`] as number)}
+                                                            </td>
+                                                        ))}
+                                                        {pivot.ngoaiCskcb.length > 0 && (
+                                                            <td className="p-3 text-right font-bold text-blue-800 bg-blue-50/40 border border-gray-200">
+                                                                {fmtNum(row["ngoai_tong"] as number)}
+                                                            </td>
+                                                        )}
+                                                        {pivot.noiCskcb.map((c) => (
+                                                            <td key={`noi-${c.ma}`} className="p-3 text-right text-slate-600 border border-gray-200">
+                                                                {fmtNum(row[`noi_${c.ma}`] as number)}
+                                                            </td>
+                                                        ))}
+                                                        {pivot.noiCskcb.length > 0 && (
+                                                            <td className="p-3 text-right font-bold text-orange-800 bg-orange-50/40 border border-gray-200">
+                                                                {fmtNum(row["noi_tong"] as number)}
+                                                            </td>
+                                                        )}
+                                                        <td className="p-3 text-right font-bold text-slate-900 bg-slate-50/80 border border-gray-200">
+                                                            {fmtNum(row["tong_cong"] as number)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-indigo-50/80 text-slate-800 text-sm">
+                                            <tr className="font-medium border-t-2 border-slate-300">
+                                                <td className="p-4 px-4 sticky left-0 bg-indigo-50 border border-gray-200 font-bold shadow-[1px_0_0_0_#e5e7eb]">
+                                                    TỔNG
+                                                </td>
+                                                {pivot.ngoaiCskcb.map((c) => {
+                                                    const total = pivot.pivotRows.reduce(
+                                                        (s, r) => s + ((r[`ngoai_${c.ma}`] as number) || 0), 0
+                                                    );
+                                                    return (
+                                                        <td key={`t-ngoai-${c.ma}`} className="p-4 text-right border border-gray-200">
+                                                            {fmtNum(total)}
+                                                        </td>
+                                                    );
+                                                })}
+                                                {pivot.ngoaiCskcb.length > 0 && (
+                                                    <td className="p-4 text-right border border-gray-200 bg-blue-100/40 font-bold">
+                                                        {fmtNum(pivot.grandNgoai)}
+                                                    </td>
+                                                )}
+                                                {pivot.noiCskcb.map((c) => {
+                                                    const total = pivot.pivotRows.reduce(
+                                                        (s, r) => s + ((r[`noi_${c.ma}`] as number) || 0), 0
+                                                    );
+                                                    return (
+                                                        <td key={`t-noi-${c.ma}`} className="p-4 text-right border border-gray-200">
+                                                            {fmtNum(total)}
+                                                        </td>
+                                                    );
+                                                })}
+                                                {pivot.noiCskcb.length > 0 && (
+                                                    <td className="p-4 text-right border border-gray-200 bg-orange-100/40 font-bold">
+                                                        {fmtNum(pivot.grandNoi)}
+                                                    </td>
+                                                )}
+                                                <td className="p-4 text-right bg-indigo-100 border border-gray-200 font-bold">
+                                                    {fmtNum(pivot.grandNgoai + pivot.grandNoi)}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            );
+                        })()}
 
                         {/* ── Tab content: Data tables (valid / duplicate) ── */}
                         {selectedTab !== "summary" && (
