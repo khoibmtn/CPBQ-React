@@ -5,8 +5,8 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
-import { SCHEMA_COLS } from "@/lib/schema";
-import { readExcelFile, detectCompatibleSheets, extractSheetRows, type Row } from "@/lib/excelParser";
+import { SCHEMA_COLS, ROW_KEY_COLS } from "@/lib/schema";
+import { readExcelFile, detectCompatibleSheets, extractSheetRows, processSheet, type Row } from "@/lib/excelParser";
 
 /* ── Types ── */
 
@@ -195,35 +195,73 @@ export default function TabImport() {
         setSheets([]);
 
         try {
-            // ── Parse Excel on the client (avoids Vercel 4.5 MB body limit) ──
+            // ── ALL processing on client (avoids Vercel 4.5 MB body limit) ──
             const workbook = await readExcelFile(file);
             const compatible = detectCompatibleSheets(workbook);
             if (compatible.length === 0) {
                 throw new Error("Không tìm thấy sheet nào có đủ 14 cột bắt buộc.");
             }
 
-            // Extract rows for each compatible sheet
-            const sheetsPayload = compatible.map((s) => {
-                const rows = extractSheetRows(workbook, s.sheetName);
-                parsedSheetRows.current.set(s.sheetName, rows);
-                return { name: s.sheetName, rows };
+            // Process each sheet client-side (transform, validate, summary)
+            const processedSheets = compatible.map((s) => {
+                const rawRows = extractSheetRows(workbook, s.sheetName);
+                const processed = processSheet(
+                    s.sheetName,
+                    rawRows,
+                    file.name,
+                    s.matchedCols.length
+                );
+                // Cache transformed valid rows for later upload
+                parsedSheetRows.current.set(s.sheetName, processed.validRows);
+                return processed;
             });
 
-            // Send lightweight JSON (not the 6 MB binary file)
-            const res = await fetch("/api/bq/overview/import", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fileName: file.name, sheets: sheetsPayload }),
-            });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error);
-            const sheetsData: SheetData[] = d.sheets || [];
-            setSheets(sheetsData);
-            if (sheetsData.length > 0) {
-                setSelectedSheet(sheetsData[0].sheetName);
+            // POST only key columns for duplicate check (tiny payload: 5 cols × N rows)
+            const allSheets: SheetData[] = [];
+            for (const ps of processedSheets) {
+                const keys = ps.validRows.map((row) => {
+                    const k: Record<string, unknown> = {};
+                    for (const col of ROW_KEY_COLS) k[col] = row[col] ?? null;
+                    return k;
+                });
+
+                let dupIndices = new Set<number>();
+                try {
+                    const res = await fetch("/api/bq/overview/import", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ keys }),
+                    });
+                    const d = await res.json();
+                    if (d.error) throw new Error(d.error);
+                    dupIndices = new Set<number>(d.duplicateIndices || []);
+                } catch {
+                    // BQ unreachable — treat all as new
+                }
+
+                // Add _isDuplicate flag to display rows
+                const displayRows = ps.validRows.map((row, i) => ({
+                    ...row,
+                    _isDuplicate: dupIndices.has(i),
+                }));
+
+                allSheets.push({
+                    sheetName: ps.sheetName,
+                    matchedCols: ps.matchedCols,
+                    validRows: displayRows,
+                    invalidCount: ps.invalidCount,
+                    dupCount: dupIndices.size,
+                    newCount: ps.validRows.length - dupIndices.size,
+                    issues: ps.issues,
+                    summary: ps.summary,
+                });
+            }
+
+            setSheets(allSheets);
+            if (allSheets.length > 0) {
+                setSelectedSheet(allSheets[0].sheetName);
                 setSelectedTab("summary");
-                // Auto-check all valid (non-duplicate) rows
-                const firstSheet = sheetsData[0];
+                const firstSheet = allSheets[0];
                 const validIndices = new Set<number>();
                 firstSheet.validRows.forEach((row, i) => {
                     if (!row._isDuplicate) validIndices.add(i);
@@ -238,20 +276,19 @@ export default function TabImport() {
         }
     };
 
-    /* ── Upload (PUT) ── */
+    /* ── Upload (PUT) — sends rows in chunks to stay under 4.5 MB ── */
     const handleUpload = async (mode: "new" | "overwrite") => {
         if (!file || !currentSheet) return;
         setLoading(true);
         setError(null);
 
-        // Collect checked row original indices (_idx), filter removed, and filter by type
+        // Collect checked row original indices, filter removed, filter by type
         const activeRows = currentSheet.validRows.filter(
             (row, i) => !removedRows.has(i) && checkedRows.has(i) &&
                 (mode === "new" ? !row._isDuplicate : row._isDuplicate)
         );
-        const rowIndices = activeRows.map((r) => r._idx as number);
 
-        if (rowIndices.length === 0) {
+        if (activeRows.length === 0) {
             setError(mode === "new"
                 ? "Không có dòng mới nào được chọn."
                 : "Không có dòng trùng nào được chọn để ghi đè.");
@@ -259,22 +296,33 @@ export default function TabImport() {
             return;
         }
 
-        try {
-            // ── Send JSON rows instead of re-uploading the file ──
-            const sheetRows = parsedSheetRows.current.get(selectedSheet) || [];
+        // Get the full transformed rows from cache
+        const cachedRows = parsedSheetRows.current.get(selectedSheet) || [];
+        // Map selected display rows back to cached transformed rows by _idx
+        const rowsToSend = activeRows.map((row) => {
+            const idx = row._idx as number;
+            return cachedRows[idx] || row;
+        });
 
-            const res = await fetch("/api/bq/overview/import", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    fileName: file.name,
-                    rows: sheetRows,
-                    rowIndices,
-                    mode,
-                }),
-            });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error);
+        try {
+            // ── Chunk rows: ~1500 rows per request ≈ 2-3 MB per chunk ──
+            const CHUNK_SIZE = 1500;
+            let totalUploaded = 0;
+            let totalDeleted = 0;
+
+            for (let i = 0; i < rowsToSend.length; i += CHUNK_SIZE) {
+                const chunk = rowsToSend.slice(i, i + CHUNK_SIZE);
+                const res = await fetch("/api/bq/overview/import", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ rows: chunk, mode }),
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+                totalUploaded += d.uploaded || 0;
+                totalDeleted += d.deleted || 0;
+            }
+
             // Mark uploaded rows as done
             const doneIndices = currentSheet.validRows
                 .map((row, i) => ({ row, i }))
@@ -292,19 +340,17 @@ export default function TabImport() {
                 doneIndices.forEach((i) => { next[i] = mode; });
                 return next;
             });
-            // Uncheck done rows
             setCheckedRows((prev) => {
                 const next = new Set(prev);
                 doneIndices.forEach((i) => next.delete(i));
                 return next;
             });
 
-            if (d.mode === "overwrite") {
-                const msgKey = `${selectedSheet}:${selectedTab}`;
-                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã ghi đè ${d.uploaded?.toLocaleString() || 0} dòng (xóa ${d.deleted?.toLocaleString() || 0} bản ghi cũ).`));
+            const msgKey = `${selectedSheet}:${selectedTab}`;
+            if (mode === "overwrite") {
+                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã ghi đè ${totalUploaded.toLocaleString()} dòng (xóa ${totalDeleted.toLocaleString()} bản ghi cũ).`));
             } else {
-                const msgKey = `${selectedSheet}:${selectedTab}`;
-                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã tải lên ${d.uploaded?.toLocaleString() || 0} dòng mới thành công!`));
+                setUploadMsgs((prev) => new Map(prev).set(msgKey, `✅ Đã tải lên ${totalUploaded.toLocaleString()} dòng mới thành công!`));
             }
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : "Unknown error");

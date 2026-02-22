@@ -1,99 +1,41 @@
 import { NextResponse } from "next/server";
 import { getBqClient } from "@/lib/bigquery";
 import {
-    PROJECT_ID,
-    DATASET_ID,
     FULL_TABLE_ID,
-    getFullTableId,
-    LOOKUP_CSKCB_TABLE,
-    LOOKUP_KHOA_TABLE,
-    LOOKUP_LOAIKCB_TABLE,
 } from "@/lib/config";
-import { REQUIRED_COLS, SCHEMA_COLS, ROW_KEY_COLS } from "@/lib/schema";
+import { SCHEMA_COLS, ROW_KEY_COLS } from "@/lib/schema";
 
-/* ── Route config: BigQuery calls can be slow ── */
+/* ── Route config ── */
 export const maxDuration = 60;
 
+type Row = Record<string, unknown>;
+
 /* ═══════════════════════════════════════════════════════════════════════════════
-   POST /api/bq/overview/import
-   Body: JSON { fileName, sheets: [{ name, rows }] }
-   (Excel is now parsed on the client to avoid Vercel's 4.5 MB body limit)
-   Returns: validation results (sheets, valid/invalid counts, summary, duplicates)
+   POST /api/bq/overview/import — Duplicate check ONLY
+   Body: JSON { keys: [ {ma_cskcb, ma_bn, ma_loaikcb, ngay_vao, ngay_ra}, ... ] }
+
+   Client does: parse Excel → transform → validate → summary.
+   Server only checks which rows already exist in BigQuery.
+   Returns: { duplicateIndices: [0, 3, 7, ...] }
+
+   Payload size: ~5 cols × N rows → ~1.4 MB for 14k rows (well under 4.5 MB limit)
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const fileName: string = body.fileName || "upload.xlsx";
-        const sheetsInput: { name: string; rows: Row[] }[] = body.sheets || [];
+        const keys: Row[] = body.keys || [];
 
-        if (!sheetsInput.length) {
-            return NextResponse.json(
-                { error: "Không tìm thấy sheet nào có đủ cột bắt buộc." },
-                { status: 400 }
-            );
+        if (!keys.length) {
+            return NextResponse.json({ duplicateIndices: [] });
         }
 
-        // Process ALL compatible sheets
         const client = getBqClient();
-        const sheetsData: {
-            sheetName: string;
-            matchedCols: number;
-            validRows: Record<string, unknown>[];
-            invalidCount: number;
-            dupCount: number;
-            newCount: number;
-            issues: { col: string; count: number }[];
-            summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
-        }[] = [];
+        const dupIndices = await getDuplicateIndices(client, keys);
 
-        for (const sheetInput of sheetsInput) {
-            if (!sheetInput.rows || sheetInput.rows.length === 0) continue;
-
-            // Transform + validate
-            const transformed = transformRows(sheetInput.rows, fileName);
-            const { valid, invalid, issues } = validateRows(transformed);
-            const summary = buildSummary(valid);
-
-            // Check duplicates (get indices, not just count)
-            let dupIndices = new Set<number>();
-            try {
-                dupIndices = await getDuplicateIndices(client, valid);
-            } catch {
-                // BigQuery unavailable
-            }
-
-            // Build display rows with all schema columns + isDuplicate flag
-            const displayRows = valid.map((row, idx) => {
-                const display: Record<string, unknown> = { _idx: idx };
-                for (const col of SCHEMA_COLS) {
-                    display[col] = row[col] ?? null;
-                }
-                display._isDuplicate = dupIndices.has(idx);
-                return display;
-            });
-
-            // Count matched columns
-            const colsInRows = sheetInput.rows.length > 0
-                ? Object.keys(sheetInput.rows[0])
-                : [];
-            const matchedCount = SCHEMA_COLS.filter((c) =>
-                colsInRows.includes(c)
-            ).length;
-
-            sheetsData.push({
-                sheetName: sheetInput.name,
-                matchedCols: matchedCount,
-                validRows: displayRows,
-                invalidCount: invalid.length,
-                dupCount: dupIndices.size,
-                newCount: valid.length - dupIndices.size,
-                issues,
-                summary,
-            });
-        }
-
-        return NextResponse.json({ sheets: sheetsData });
+        return NextResponse.json({
+            duplicateIndices: Array.from(dupIndices),
+        });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json({ error: msg }, { status: 500 });
@@ -101,59 +43,30 @@ export async function POST(request: Request) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   PUT /api/bq/overview/import
-   Body: JSON { fileName, sheet, rows, rowIndices, mode }
-   (Excel is now parsed on the client to avoid Vercel's 4.5 MB body limit)
-   - mode="new": Upload only non-duplicate rows
-   - mode="overwrite": DELETE old duplicates first, then INSERT new versions
+   PUT /api/bq/overview/import — Upload rows to BigQuery
+   Body: JSON { rows: [...], mode: "new" | "overwrite" }
+
+   Client sends pre-transformed rows in CHUNKS (~1500 rows per request).
+   Server uploads to BigQuery.
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const fileName: string = body.fileName || "upload.xlsx";
-        const sheetRows: Row[] = body.rows || [];
-        const rowIndicesArr: number[] | null = body.rowIndices || null;
+        const rows: Row[] = body.rows || [];
         const mode: string = body.mode || "new";
 
-        if (!sheetRows.length) {
-            return NextResponse.json(
-                { error: "Missing rows." },
-                { status: 400 }
-            );
-        }
-
-        // Transform + validate
-        const transformed = transformRows(sheetRows, fileName);
-        const { valid } = validateRows(transformed);
-
-        if (valid.length === 0) {
-            return NextResponse.json({ error: "Không có dòng hợp lệ.", uploaded: 0 });
-        }
-
-        // Filter by selected row indices if provided
-        let selectedRows = valid;
-        if (rowIndicesArr) {
-            try {
-                const indexSet = new Set(rowIndicesArr);
-                selectedRows = valid.filter((_, i) => indexSet.has(i));
-            } catch {
-                // Invalid — use all valid rows
-            }
-        }
-
-        if (selectedRows.length === 0) {
-            return NextResponse.json({ error: "Không có dòng nào được chọn.", uploaded: 0 });
+        if (!rows.length) {
+            return NextResponse.json({ error: "Không có dòng nào.", uploaded: 0 });
         }
 
         const client = getBqClient();
 
         if (mode === "overwrite") {
-            // True overwrite: DELETE old records by composite key, then INSERT new
             const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
             let deletedCount = 0;
 
-            for (const row of selectedRows) {
+            for (const row of rows) {
                 const conditions: string[] = [];
                 for (const col of ROW_KEY_COLS) {
                     const val = row[col];
@@ -180,24 +93,12 @@ export async function PUT(request: Request) {
                     console.error("[OVERWRITE-DELETE]", e instanceof Error ? e.message : e);
                 }
             }
-            console.log(`[OVERWRITE] Deleted ${deletedCount} old records`);
 
-            // Then insert all selected rows (fresh)
-            const uploaded = await uploadToBigQuery(client, selectedRows);
+            const uploaded = await uploadToBigQuery(client, rows);
             return NextResponse.json({ uploaded, deleted: deletedCount, mode: "overwrite" });
         } else {
-            // mode="new": Filter out duplicates, upload only new
-            const dupIndices = await getDuplicateIndices(client, selectedRows);
-            const newRows = selectedRows.filter((_, i) => !dupIndices.has(i));
-
-            if (newRows.length === 0) {
-                return NextResponse.json({
-                    uploaded: 0,
-                    message: "Tất cả dòng đã tồn tại trên BigQuery.",
-                });
-            }
-
-            const uploaded = await uploadToBigQuery(client, newRows);
+            // mode="new": upload directly (client already filtered out duplicates)
+            const uploaded = await uploadToBigQuery(client, rows);
             return NextResponse.json({ uploaded, mode: "new" });
         }
     } catch (error: unknown) {
@@ -207,259 +108,9 @@ export async function PUT(request: Request) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   HELPER FUNCTIONS
+   HELPERS
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-type Row = Record<string, unknown>;
-
-function transformRows(rows: Row[], sourceFileName: string): Row[] {
-    const now = new Date().toISOString();
-
-    return rows.map((row) => {
-        const r: Row = {};
-
-        // Normalize column names (rows already have lowercase keys from client,
-        // but normalize again for safety)
-        for (const [key, val] of Object.entries(row)) {
-            r[key.toLowerCase().trim()] = val;
-        }
-
-        // Parse date integers (ngay_sinh, gt_the_tu, gt_the_den)
-        for (const col of ["ngay_sinh", "gt_the_tu", "gt_the_den"]) {
-            if (r[col] != null) {
-                r[col] = parseDateInt(r[col]);
-            }
-        }
-
-        // Parse datetime strings (ngay_vao, ngay_ra)
-        for (const col of ["ngay_vao", "ngay_ra"]) {
-            if (r[col] != null) {
-                r[col] = parseDatetimeStr(r[col]);
-            }
-        }
-
-        // String columns
-        const strCols = [
-            "ma_bn", "ma_the", "ma_dkbd", "ma_benh", "ma_benhkhac",
-            "ma_noi_chuyen", "ma_khoa", "ma_khuvuc", "ma_cskcb",
-            "giam_dinh", "ho_ten", "dia_chi",
-        ];
-        for (const col of strCols) {
-            if (r[col] != null && r[col] !== "") {
-                r[col] = String(r[col]);
-                if (r[col] === "nan" || r[col] === "undefined") {
-                    r[col] = null;
-                }
-            } else {
-                r[col] = null;
-            }
-        }
-
-        // Helper to parse messy numbers (e.g., "2,027" or " 1,500.5 ")
-        const parseNum = (v: unknown) => {
-            if (typeof v === "number") return v;
-            if (typeof v === "string") {
-                const cleaned = v.replace(/,/g, "").trim();
-                return cleaned ? Number(cleaned) : NaN;
-            }
-            return NaN;
-        };
-
-        // Float columns
-        const floatCols = [
-            "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau",
-            "t_pttt", "t_vtyt", "t_dvkt_tyle", "t_thuoc_tyle",
-            "t_vtyt_tyle", "t_kham", "t_giuong", "t_vchuyen",
-            "t_bntt", "t_bhtt", "t_ngoaids", "t_xuattoan",
-            "t_nguonkhac", "t_datuyen", "t_vuottran",
-        ];
-        for (const col of floatCols) {
-            if (r[col] != null) {
-                const num = parseNum(r[col]);
-                r[col] = isNaN(num) ? null : num;
-            }
-        }
-
-        // Int columns
-        const intCols = [
-            "stt", "gioi_tinh", "ma_lydo_vvien", "so_ngay_dtri",
-            "ket_qua_dtri", "tinh_trang_rv", "nam_qt", "thang_qt",
-            "ma_loaikcb", "noi_ttoan",
-        ];
-        for (const col of intCols) {
-            if (r[col] != null) {
-                const num = parseNum(r[col]);
-                r[col] = isNaN(num) ? null : Math.round(num);
-            }
-        }
-
-        // Metadata
-        r["upload_timestamp"] = now;
-        r["source_file"] = sourceFileName;
-
-        return r;
-    });
-}
-
-function parseDateInt(val: unknown): string | null {
-    if (val == null) return null;
-    try {
-        const raw = String(val).trim();
-
-        // Already ISO format: "YYYY-MM-DD" → pass through
-        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-
-        // Integer format: 19770902 → "1977-09-02"
-        const s = String(Math.round(Number(raw)));
-        if (s.length === 8) {
-            const y = s.slice(0, 4);
-            const m = s.slice(4, 6);
-            const d = s.slice(6, 8);
-            return `${y}-${m}-${d}`;
-        }
-
-        // Excel serial date number (e.g. 44927)
-        if (!isNaN(Number(raw)) && Number(raw) > 10000 && Number(raw) < 100000) {
-            const excelEpoch = new Date(1899, 11, 30);
-            const date = new Date(excelEpoch.getTime() + Number(raw) * 86400000);
-            const yy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, "0");
-            const dd = String(date.getDate()).padStart(2, "0");
-            return `${yy}-${mm}-${dd}`;
-        }
-
-        return null;
-    } catch {
-        return null;
-    }
-}
-
-function parseDatetimeStr(val: unknown): string | null {
-    if (val == null) return null;
-    try {
-        const s = String(val).trim().replace(/^'/, "");
-
-        // Already ISO datetime: "2026-01-02T07:35:00" → pass through
-        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s;
-
-        // Already ISO date only: "2026-01-02" → append time
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00`;
-
-        if (s.length === 12) {
-            // YYYYMMDDHHmm
-            return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:00`;
-        } else if (s.length === 14) {
-            // YYYYMMDDHHmmss
-            return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}`;
-        } else if (s.length === 8) {
-            // YYYYMMDD
-            return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T00:00:00`;
-        }
-        // Try parsing as JS Date
-        const d = new Date(val as string);
-        if (!isNaN(d.getTime())) {
-            return d.toISOString().replace("Z", "");
-        }
-        return null;
-    } catch {
-        return null;
-    }
-}
-
-function validateRows(rows: Row[]): {
-    valid: Row[];
-    invalid: Row[];
-    issues: { col: string; count: number }[];
-} {
-    const issueMap = new Map<string, number>();
-    const valid: Row[] = [];
-    const invalid: Row[] = [];
-
-    for (const row of rows) {
-        let isValid = true;
-
-        for (const col of REQUIRED_COLS) {
-            const val = row[col as string];
-
-            // Check null/empty
-            if (val == null || val === "" || val === "nan") {
-                issueMap.set(col, (issueMap.get(col) || 0) + 1);
-                isValid = false;
-                continue;
-            }
-
-            // Column-specific checks
-            if (col === "gioi_tinh") {
-                const num = Number(val);
-                if (![1, 2].includes(num)) {
-                    issueMap.set(col, (issueMap.get(col) || 0) + 1);
-                    isValid = false;
-                }
-            } else if (col === "thang_qt") {
-                const num = Number(val);
-                if (isNaN(num) || num < 1 || num > 12) {
-                    issueMap.set(col, (issueMap.get(col) || 0) + 1);
-                    isValid = false;
-                }
-            } else if (col === "t_tongchi" || col === "t_bhtt") {
-                if (isNaN(Number(val))) {
-                    issueMap.set(col, (issueMap.get(col) || 0) + 1);
-                    isValid = false;
-                }
-            }
-        }
-
-        if (isValid) {
-            valid.push(row);
-        } else {
-            invalid.push(row);
-        }
-    }
-
-    const issues = Array.from(issueMap.entries()).map(([col, count]) => ({
-        col,
-        count,
-    }));
-
-    return { valid, invalid, issues };
-}
-
-function buildSummary(
-    rows: Row[]
-): { period: string; maCSKCB: string; rows: number; tongChi: string }[] {
-    const groups = new Map<
-        string,
-        { rows: number; tongChi: number }
-    >();
-
-    for (const r of rows) {
-        const key = `${r.nam_qt || "?"}/${String(r.thang_qt || "?").padStart(2, "0")}|${r.ma_cskcb || "?"}`;
-        const existing = groups.get(key) || { rows: 0, tongChi: 0 };
-        existing.rows += 1;
-        existing.tongChi += Number(r.t_tongchi) || 0;
-        groups.set(key, existing);
-    }
-
-    return Array.from(groups.entries())
-        .sort()
-        .map(([key, val]) => {
-            const [period, maCSKCB] = key.split("|");
-            return {
-                period,
-                maCSKCB,
-                rows: val.rows,
-                tongChi: val.tongChi.toLocaleString("vi-VN", {
-                    maximumFractionDigits: 0,
-                }),
-            };
-        });
-}
-
-/**
- * Unwrap BigQuery value objects into plain strings for comparison.
- * BQ returns datetime/timestamp fields as `{ value: "2026-01-02T07:35:00" }`.
- * Without unwrapping, String({value:...}) becomes "[object Object]".
- */
 function bqScalar(val: unknown): string {
     if (val == null) return "";
     if (typeof val === "object" && val !== null && "value" in (val as Record<string, unknown>)) {
@@ -472,9 +123,7 @@ function bqScalar(val: unknown): string {
 async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number>> {
     const dupIndices = new Set<number>();
     const maBnList = [
-        ...new Set(
-            rows.map((r) => r.ma_bn).filter(Boolean).map(String)
-        ),
+        ...new Set(rows.map((r) => r.ma_bn).filter(Boolean).map(String)),
     ];
     if (maBnList.length === 0) return dupIndices;
 
@@ -498,56 +147,40 @@ async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number
             );
 
             rows.forEach((row, idx) => {
-                const rowKey = ROW_KEY_COLS.map((c) =>
-                    bqScalar(row[c])
-                ).join("|");
-                if (bqKeys.has(rowKey)) {
-                    dupIndices.add(idx);
-                }
+                const rowKey = ROW_KEY_COLS.map((c) => bqScalar(row[c])).join("|");
+                if (bqKeys.has(rowKey)) dupIndices.add(idx);
             });
         } catch {
             // Skip batch errors
         }
     }
-
     return dupIndices;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function uploadToBigQuery(client: any, rows: Row[]): Promise<number> {
-    // Keep only schema columns + metadata
-    const allowedCols = [
-        ...SCHEMA_COLS,
-        "upload_timestamp",
-        "source_file",
-    ];
+    const allowedCols = [...SCHEMA_COLS, "upload_timestamp", "source_file"];
     const allowedSet = new Set(allowedCols);
 
     const cleanRows = rows.map((row) => {
         const r: Row = {};
         for (const [key, val] of Object.entries(row)) {
-            if (allowedSet.has(key)) {
-                r[key] = val;
-            }
+            if (allowedSet.has(key)) r[key] = val;
         }
         return r;
     });
 
-    // Use DML INSERT (not streaming insert) to avoid streaming buffer issues
-    // Streaming inserts block DELETE/UPDATE for 30-90 minutes
-    const BATCH = 200; // Smaller batches for DML to avoid query size limits
+    const BATCH = 200;
     let uploaded = 0;
 
     for (let i = 0; i < cleanRows.length; i += BATCH) {
         const batch = cleanRows.slice(i, i + BATCH);
 
-        // Build VALUES clause
         const valueRows = batch.map((row) => {
             const vals = allowedCols.map((col) => {
                 const v = row[col];
                 if (v === null || v === undefined) return "NULL";
                 if (typeof v === "number") return String(v);
-                // Escape single quotes in strings
                 const s = String(v).replace(/'/g, "\\'");
                 return `'${s}'`;
             });
@@ -563,9 +196,7 @@ async function uploadToBigQuery(client: any, rows: Row[]): Promise<number> {
             uploaded += batch.length;
         } catch (err: unknown) {
             console.error("[UPLOAD] DML INSERT error:", err instanceof Error ? err.message : err);
-            // Continue with next batch
         }
     }
-
     return uploaded;
 }
