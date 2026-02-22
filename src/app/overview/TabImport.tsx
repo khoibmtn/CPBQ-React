@@ -964,49 +964,46 @@ export default function TabImport() {
                             if (!pivot) return (
                                 <div className="px-5 py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
                             );
-                            const fmtNum = (v: number) => v === 0 ? "" : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
-                            const nDataCols = (pivot.ngoaiCskcb.length > 0 ? pivot.ngoaiCskcb.length + 1 : 0)
+                            const dash = "—";
+                            const fmtNum = (v: number) => v === 0 ? dash : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
+                            const totalCols = 1
+                                + (pivot.ngoaiCskcb.length > 0 ? pivot.ngoaiCskcb.length + 1 : 0)
                                 + (pivot.noiCskcb.length > 0 ? pivot.noiCskcb.length + 1 : 0) + 1;
 
-                            const renderDataRow = (row: Record<string, number | string>, idx: number) => {
-                                const isEven = idx % 2 === 0;
-                                const bgClass = isEven ? "bg-white" : "bg-slate-50/40";
-                                const stickyBg = isEven ? "bg-white" : "bg-[#f9fafb]";
-                                return (
-                                    <tr key={idx} className={`${bgClass} hover:bg-slate-50 transition-colors`}>
-                                        <td className={`p-3 px-4 text-left font-semibold text-slate-700 sticky left-0 ${stickyBg} border border-gray-200 shadow-[1px_0_0_0_#e5e7eb]`}>
-                                            {row.thang}
+                            const renderDataRow = (row: Record<string, number | string>, idx: number) => (
+                                <tr key={idx} className="hover:bg-gray-50/60 transition-colors border-b border-gray-100">
+                                    <td className="py-3.5 px-5 text-left text-gray-700 font-medium sticky left-0 bg-white">
+                                        {row.thang}
+                                    </td>
+                                    {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
+                                        <td key={`ngoai-${c.ma}`} className="py-3.5 px-4 text-right text-gray-600">
+                                            {fmtNum(row[`ngoai_${c.ma}`] as number)}
                                         </td>
-                                        {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
-                                            <td key={`ngoai-${c.ma}`} className="p-3 text-right text-slate-600 border border-gray-200">
-                                                {fmtNum(row[`ngoai_${c.ma}`] as number)}
-                                            </td>
-                                        ))}
-                                        {pivot.ngoaiCskcb.length > 0 && (
-                                            <td className="p-3 text-right font-bold text-blue-800 bg-blue-50/40 border border-gray-200">
-                                                {fmtNum(row["ngoai_tong"] as number)}
-                                            </td>
-                                        )}
-                                        {pivot.noiCskcb.map((c: CskcbInfo) => (
-                                            <td key={`noi-${c.ma}`} className="p-3 text-right text-slate-600 border border-gray-200">
-                                                {fmtNum(row[`noi_${c.ma}`] as number)}
-                                            </td>
-                                        ))}
-                                        {pivot.noiCskcb.length > 0 && (
-                                            <td className="p-3 text-right font-bold text-orange-800 bg-orange-50/40 border border-gray-200">
-                                                {fmtNum(row["noi_tong"] as number)}
-                                            </td>
-                                        )}
-                                        <td className="p-3 text-right font-bold text-slate-900 bg-slate-50/80 border border-gray-200">
-                                            {fmtNum(row["tong_cong"] as number)}
+                                    ))}
+                                    {pivot.ngoaiCskcb.length > 0 && (
+                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                            {fmtNum(row["ngoai_tong"] as number)}
                                         </td>
-                                    </tr>
-                                );
-                            };
+                                    )}
+                                    {pivot.noiCskcb.map((c: CskcbInfo) => (
+                                        <td key={`noi-${c.ma}`} className="py-3.5 px-4 text-right text-gray-600">
+                                            {fmtNum(row[`noi_${c.ma}`] as number)}
+                                        </td>
+                                    ))}
+                                    {pivot.noiCskcb.length > 0 && (
+                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                            {fmtNum(row["noi_tong"] as number)}
+                                        </td>
+                                    )}
+                                    <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                                        {fmtNum(row["tong_cong"] as number)}
+                                    </td>
+                                </tr>
+                            );
 
-                            const renderSubtotalRow = (label: string, section: SectionPivot, bgColor: string, stickyBg: string) => (
-                                <tr className={`font-medium border-t border-slate-300 ${bgColor}`}>
-                                    <td className={`p-3 px-4 sticky left-0 ${stickyBg} border border-gray-200 font-bold shadow-[1px_0_0_0_#e5e7eb]`}>
+                            const renderSubtotalRow = (label: string, section: SectionPivot) => (
+                                <tr className="border-b border-gray-200 bg-white">
+                                    <td className="py-3.5 px-5 text-left font-bold text-gray-900 sticky left-0 bg-white">
                                         {label}
                                     </td>
                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => {
@@ -1014,13 +1011,13 @@ export default function TabImport() {
                                             (s: number, r: Record<string, number | string>) => s + ((r[`ngoai_${c.ma}`] as number) || 0), 0
                                         );
                                         return (
-                                            <td key={`t-ngoai-${c.ma}`} className="p-3 text-right border border-gray-200 font-bold">
+                                            <td key={`t-ngoai-${c.ma}`} className="py-3.5 px-4 text-right font-bold text-gray-800">
                                                 {fmtNum(total)}
                                             </td>
                                         );
                                     })}
                                     {pivot.ngoaiCskcb.length > 0 && (
-                                        <td className="p-3 text-right border border-gray-200 bg-blue-100/40 font-bold">
+                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
                                             {fmtNum(section.grandNgoai)}
                                         </td>
                                     )}
@@ -1029,90 +1026,151 @@ export default function TabImport() {
                                             (s: number, r: Record<string, number | string>) => s + ((r[`noi_${c.ma}`] as number) || 0), 0
                                         );
                                         return (
-                                            <td key={`t-noi-${c.ma}`} className="p-3 text-right border border-gray-200 font-bold">
+                                            <td key={`t-noi-${c.ma}`} className="py-3.5 px-4 text-right font-bold text-gray-800">
                                                 {fmtNum(total)}
                                             </td>
                                         );
                                     })}
                                     {pivot.noiCskcb.length > 0 && (
-                                        <td className="p-3 text-right border border-gray-200 bg-orange-100/40 font-bold">
+                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
                                             {fmtNum(section.grandNoi)}
                                         </td>
                                     )}
-                                    <td className="p-3 text-right border border-gray-200 font-bold">
+                                    <td className="py-3.5 px-4 text-right font-bold text-gray-900">
                                         {fmtNum(section.grandNgoai + section.grandNoi)}
                                     </td>
                                 </tr>
                             );
 
                             return (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
-                                        <thead>
-                                            {/* Row 1: Group headers */}
-                                            <tr className="bg-slate-100 text-[11px] font-bold uppercase tracking-wider text-center">
-                                                <th className="p-3 text-left border border-gray-200 bg-slate-200 sticky left-0 z-10 text-slate-700">
-                                                    Kỳ
-                                                </th>
-                                                {pivot.ngoaiCskcb.length > 0 && (
-                                                    <th className="p-2 border border-gray-200 text-blue-700 bg-blue-50/80" colSpan={pivot.ngoaiCskcb.length + 1}>
-                                                        Ngoại trú
-                                                    </th>
-                                                )}
-                                                {pivot.noiCskcb.length > 0 && (
-                                                    <th className="p-2 border border-gray-200 text-orange-700 bg-orange-50/80" colSpan={pivot.noiCskcb.length + 1}>
-                                                        Nội trú
-                                                    </th>
-                                                )}
-                                                <th className="p-3 border border-gray-200 text-slate-900 bg-slate-200 min-w-[100px]">
-                                                    Tổng cộng
-                                                </th>
-                                            </tr>
-                                            {/* Row 2: Sub-headers */}
-                                            <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-tight text-right text-slate-600">
-                                                <th className="p-3 border border-gray-200 text-left sticky left-0 bg-slate-50 shadow-[1px_0_0_0_#e5e7eb]">
-                                                    Cơ sở KCB
-                                                </th>
-                                                {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
-                                                    <th key={`h-ngoai-${c.ma}`} className="p-2 border border-gray-200">{c.ten}</th>
-                                                ))}
-                                                {pivot.ngoaiCskcb.length > 0 && (
-                                                    <th className="p-2 border border-gray-200 bg-blue-100/50 text-blue-700">Tổng</th>
-                                                )}
-                                                {pivot.noiCskcb.map((c: CskcbInfo) => (
-                                                    <th key={`h-noi-${c.ma}`} className="p-2 border border-gray-200">{c.ten}</th>
-                                                ))}
-                                                {pivot.noiCskcb.length > 0 && (
-                                                    <th className="p-2 border border-gray-200 bg-orange-100/50 text-orange-700">Tổng</th>
-                                                )}
-                                                <th className="p-2 border border-gray-200 text-slate-800 bg-slate-100/50">Toàn viện</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-sm">
-                                            {/* Section: Hợp lệ */}
-                                            <tr className="bg-emerald-50">
-                                                <td className="p-2 px-4 font-bold text-emerald-700 uppercase tracking-tight sticky left-0 bg-emerald-50 border border-gray-200 shadow-[1px_0_0_0_#e5e7eb]" colSpan={1}>
-                                                    ✅ Hợp lệ
-                                                </td>
-                                                <td colSpan={nDataCols} className="bg-emerald-50 border border-gray-200" />
-                                            </tr>
-                                            {pivot.sections[0].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
-                                            {renderSubtotalRow("TỔNG HỢP LỆ", pivot.sections[0].data, "bg-emerald-50/60", "bg-emerald-50")}
+                                <div>
+                                    {/* Title bar */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-gray-900">Xác thực dữ liệu</h3>
+                                            <p className="text-sm text-gray-500 mt-0.5">Báo cáo chi tiết kiểm tra và đối chiếu dữ liệu Import</p>
+                                        </div>
+                                        <button
+                                            onClick={handleValidate}
+                                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                                        >
+                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                                            Xác thực lại
+                                        </button>
+                                    </div>
 
-                                            {/* Section: Trùng lặp */}
-                                            <tr className="bg-amber-50">
-                                                <td className="p-2 px-4 font-bold text-amber-700 uppercase tracking-tight sticky left-0 bg-amber-50 border border-gray-200 shadow-[1px_0_0_0_#e5e7eb]" colSpan={1}>
-                                                    📋 Trùng lặp
-                                                </td>
-                                                <td colSpan={nDataCols} className="bg-amber-50 border border-gray-200" />
-                                            </tr>
-                                            {pivot.sections[1].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
-                                            {renderSubtotalRow("TỔNG TRÙNG LẶP", pivot.sections[1].data, "bg-amber-50/60", "bg-amber-50")}
-                                        </tbody>
-                                        <tfoot className="bg-indigo-50/80 text-slate-800 text-sm">
-                                            {renderSubtotalRow("TỔNG CHUNG", pivot.total, "bg-indigo-50", "bg-indigo-50")}
-                                        </tfoot>
-                                    </table>
+                                    {/* Table */}
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                                        <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                            <thead>
+                                                {/* Row 1: Group headers */}
+                                                <tr className="text-xs font-bold uppercase tracking-wider text-center" style={{ background: "#ddd6f3" }}>
+                                                    <th className="py-3.5 px-5 text-left text-indigo-800 sticky left-0 z-10" style={{ background: "#ddd6f3" }}>
+                                                        Kỳ
+                                                    </th>
+                                                    {pivot.ngoaiCskcb.length > 0 && (
+                                                        <th className="py-3 px-3 text-indigo-800" colSpan={pivot.ngoaiCskcb.length + 1}>
+                                                            Ngoại trú
+                                                        </th>
+                                                    )}
+                                                    {pivot.noiCskcb.length > 0 && (
+                                                        <th className="py-3 px-3 text-indigo-800" colSpan={pivot.noiCskcb.length + 1}>
+                                                            Nội trú
+                                                        </th>
+                                                    )}
+                                                    <th className="py-3.5 px-4 text-indigo-800 min-w-[100px]">
+                                                        Tổng cộng
+                                                    </th>
+                                                </tr>
+                                                {/* Row 2: Sub-headers */}
+                                                <tr className="text-[11px] font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200" style={{ background: "#ece8f5" }}>
+                                                    <th className="py-3 px-5 text-left italic font-semibold text-gray-500 sticky left-0" style={{ background: "#ece8f5" }}>
+                                                        Cơ sở KCB
+                                                    </th>
+                                                    {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
+                                                        <th key={`h-ngoai-${c.ma}`} className="py-3 px-4 font-bold text-gray-700">{c.ten}</th>
+                                                    ))}
+                                                    {pivot.ngoaiCskcb.length > 0 && (
+                                                        <th className="py-3 px-4 text-indigo-600 font-bold">Tổng</th>
+                                                    )}
+                                                    {pivot.noiCskcb.map((c: CskcbInfo) => (
+                                                        <th key={`h-noi-${c.ma}`} className="py-3 px-4 font-bold text-gray-700">{c.ten}</th>
+                                                    ))}
+                                                    {pivot.noiCskcb.length > 0 && (
+                                                        <th className="py-3 px-4 text-indigo-600 font-bold">Tổng</th>
+                                                    )}
+                                                    <th className="py-3 px-4 text-gray-700 font-bold">Toàn viện</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-sm">
+                                                {/* Section: Hợp lệ */}
+                                                <tr style={{ background: "#e8f5e9" }}>
+                                                    <td className="py-2.5 px-5 font-bold text-emerald-700 uppercase tracking-tight sticky left-0 text-sm" style={{ background: "#e8f5e9" }} colSpan={1}>
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <svg className="w-4 h-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                                                            Hợp lệ
+                                                        </span>
+                                                    </td>
+                                                    <td colSpan={totalCols - 1} style={{ background: "#e8f5e9" }} />
+                                                </tr>
+                                                {pivot.sections[0].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
+                                                {renderSubtotalRow("TỔNG HỢP LỆ", pivot.sections[0].data)}
+
+                                                {/* Section: Trùng lặp */}
+                                                <tr style={{ background: "#fff3e0" }}>
+                                                    <td className="py-2.5 px-5 font-bold text-amber-700 uppercase tracking-tight sticky left-0 text-sm" style={{ background: "#fff3e0" }} colSpan={1}>
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <svg className="w-4 h-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.5A2.5 2.5 0 014.5 2h6A2.5 2.5 0 0113 4.5V6h1.5A2.5 2.5 0 0117 8.5v7a2.5 2.5 0 01-2.5 2.5h-6A2.5 2.5 0 016 15.5V14H4.5A2.5 2.5 0 012 11.5v-7z" /></svg>
+                                                            Trùng lặp
+                                                        </span>
+                                                    </td>
+                                                    <td colSpan={totalCols - 1} style={{ background: "#fff3e0" }} />
+                                                </tr>
+                                                {pivot.sections[1].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
+                                                {renderSubtotalRow("TỔNG TRÙNG LẶP", pivot.sections[1].data)}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="border-t-[3px] border-indigo-400" style={{ background: "#ede7f6" }}>
+                                                    <td className="py-4 px-5 text-left font-bold text-indigo-700 text-base sticky left-0" style={{ background: "#ede7f6" }}>
+                                                        TỔNG CHUNG
+                                                    </td>
+                                                    {pivot.ngoaiCskcb.map((c: CskcbInfo) => {
+                                                        const total = pivot.total.pivotRows.reduce(
+                                                            (s: number, r: Record<string, number | string>) => s + ((r[`ngoai_${c.ma}`] as number) || 0), 0
+                                                        );
+                                                        return (
+                                                            <td key={`gt-ngoai-${c.ma}`} className="py-4 px-4 text-right font-bold text-indigo-700 text-base">
+                                                                {fmtNum(total)}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    {pivot.ngoaiCskcb.length > 0 && (
+                                                        <td className="py-4 px-4 text-right font-bold text-indigo-600 text-base">
+                                                            {fmtNum(pivot.total.grandNgoai)}
+                                                        </td>
+                                                    )}
+                                                    {pivot.noiCskcb.map((c: CskcbInfo) => {
+                                                        const total = pivot.total.pivotRows.reduce(
+                                                            (s: number, r: Record<string, number | string>) => s + ((r[`noi_${c.ma}`] as number) || 0), 0
+                                                        );
+                                                        return (
+                                                            <td key={`gt-noi-${c.ma}`} className="py-4 px-4 text-right font-bold text-indigo-700 text-base">
+                                                                {fmtNum(total)}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    {pivot.noiCskcb.length > 0 && (
+                                                        <td className="py-4 px-4 text-right font-bold text-indigo-600 text-base">
+                                                            {fmtNum(pivot.total.grandNoi)}
+                                                        </td>
+                                                    )}
+                                                    <td className="py-4 px-4 text-right font-extrabold text-indigo-700 text-base">
+                                                        {fmtNum(pivot.total.grandNgoai + pivot.total.grandNoi)}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
                                 </div>
                             );
                         })()}
@@ -1181,8 +1239,8 @@ export default function TabImport() {
                                         <div
                                             key={i}
                                             className={`flex items-start gap-2 px-4 py-3 rounded-lg text-sm ${w.type === "error"
-                                                    ? "bg-red-50 border border-red-200 text-red-700"
-                                                    : "bg-amber-50 border border-amber-200 text-amber-700"
+                                                ? "bg-red-50 border border-red-200 text-red-700"
+                                                : "bg-amber-50 border border-amber-200 text-amber-700"
                                                 }`}
                                         >
                                             <span className="text-base mt-0.5">{w.type === "error" ? "🚨" : "⚠️"}</span>
