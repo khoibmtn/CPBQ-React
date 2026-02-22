@@ -173,14 +173,14 @@ export default function TabImport() {
             fetch("/api/bq/lookup?table=lookup_loaikcb").then((r) => r.json()),
             fetch("/api/bq/lookup?table=lookup_cskcb").then((r) => r.json()),
         ]).then(([loaiRes, cskcbRes]) => {
-            if (loaiRes.data) {
+            if (loaiRes.rows) {
                 const map = new Map<number, string>();
-                (loaiRes.data as LoaiKCBEntry[]).forEach((r) => map.set(Number(r.ma_loaikcb), r.ml2));
+                (loaiRes.rows as LoaiKCBEntry[]).forEach((r) => map.set(Number(r.ma_loaikcb), r.ml2));
                 setLoaiKCBMap(map);
             }
-            if (cskcbRes.data) {
+            if (cskcbRes.rows) {
                 const map = new Map<string, string>();
-                (cskcbRes.data as CskcbEntry[]).forEach((r) => map.set(String(r.ma_cskcb), r.ten_cskcb));
+                (cskcbRes.rows as CskcbEntry[]).forEach((r) => map.set(String(r.ma_cskcb), r.ten_cskcb));
                 setCskcbMap(map);
             }
         }).catch(() => { /* ignore lookup errors */ });
