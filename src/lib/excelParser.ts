@@ -13,6 +13,7 @@ export interface SheetInfo {
     sheetName: string;
     matchedCols: string[];
     extraCols: string[];
+    headerRowIndex: number;
 }
 
 export type Row = Record<string, unknown>;
@@ -33,36 +34,54 @@ export async function readExcelFile(file: File): Promise<XLSX.WorkBook> {
     return XLSX.read(buffer, { type: "array" });
 }
 
-/* ── Sheet detection ── */
+/* ── Sheet detection (flexible header row) ── */
 
 export function detectCompatibleSheets(workbook: XLSX.WorkBook): SheetInfo[] {
     const compatible: SheetInfo[] = [];
+    const requiredSet = new Set(REQUIRED_COLS.map((c) => c.toLowerCase()));
 
     for (const sheetName of workbook.SheetNames) {
         try {
             const sheet = workbook.Sheets[sheetName];
             if (!sheet) continue;
 
-            const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-                sheet, { defval: null }
-            );
-            if (data.length === 0) continue;
+            // Read as raw array (no auto-header)
+            const rawData = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+                header: 1,
+                defval: null,
+            }) as unknown[][];
+            if (rawData.length < 2) continue; // need header + at least 1 data row
 
-            const colsLower = Object.keys(data[0]).map((c) => c.toLowerCase().trim());
-            const matched = SCHEMA_COLS.filter((c) => colsLower.includes(c));
-            const extra = colsLower.filter(
-                (c) => !(SCHEMA_COLS as readonly string[]).includes(c)
-            );
-            const missingRequired = (REQUIRED_COLS as readonly string[]).filter(
-                (c) => !colsLower.includes(c)
-            );
+            // Scan each row to find the header
+            for (let rowIdx = 0; rowIdx < rawData.length - 1; rowIdx++) {
+                const row = rawData[rowIdx];
+                if (!row || !Array.isArray(row)) continue;
 
-            if (missingRequired.length === 0) {
-                compatible.push({
-                    sheetName,
-                    matchedCols: matched as string[],
-                    extraCols: extra,
-                });
+                const cellsLower = row.map((c) =>
+                    c != null ? String(c).toLowerCase().trim() : ""
+                );
+
+                // Check if all required cols are present in this row
+                const missingRequired = [...requiredSet].filter(
+                    (c) => !cellsLower.includes(c)
+                );
+
+                if (missingRequired.length === 0) {
+                    // Found header row
+                    const schemaCols = SCHEMA_COLS.map((c) => c.toLowerCase());
+                    const matched = schemaCols.filter((c) => cellsLower.includes(c));
+                    const extra = cellsLower.filter(
+                        (c) => c !== "" && !schemaCols.includes(c)
+                    );
+
+                    compatible.push({
+                        sheetName,
+                        matchedCols: matched,
+                        extraCols: extra,
+                        headerRowIndex: rowIdx,
+                    });
+                    break; // found header for this sheet, move to next sheet
+                }
             }
         } catch {
             continue;
@@ -71,22 +90,39 @@ export function detectCompatibleSheets(workbook: XLSX.WorkBook): SheetInfo[] {
     return compatible;
 }
 
-/* ── Row extraction ── */
+/* ── Row extraction (flexible header + filter blank rows) ── */
 
 export function extractSheetRows(
     workbook: XLSX.WorkBook,
-    sheetName: string
+    sheetName: string,
+    headerRowIndex = 0
 ): Row[] {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) return [];
-    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
-    return raw.map((row) => {
-        const r: Row = {};
-        for (const [key, val] of Object.entries(row)) {
-            r[key.toLowerCase().trim()] = val;
-        }
-        return r;
+
+    // Use `range` to tell sheet_to_json which row is the header
+    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: null,
+        range: headerRowIndex,
     });
+
+    // Normalize keys to lowercase, then filter: keep rows with ma_bn AND ho_ten
+    return raw
+        .map((row) => {
+            const r: Row = {};
+            for (const [key, val] of Object.entries(row)) {
+                r[key.toLowerCase().trim()] = val;
+            }
+            return r;
+        })
+        .filter((r) => {
+            const maBn = r.ma_bn;
+            const hoTen = r.ho_ten;
+            return (
+                maBn != null && maBn !== "" && String(maBn).trim() !== "" &&
+                hoTen != null && hoTen !== "" && String(hoTen).trim() !== ""
+            );
+        });
 }
 
 /* ── Full client-side processing (transform + validate + summary) ── */
