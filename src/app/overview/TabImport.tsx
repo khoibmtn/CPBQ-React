@@ -673,6 +673,39 @@ export default function TabImport() {
         return [...checkedRows].filter((i) => currentOrigIndices.has(i) && !doneRows.has(i)).length;
     }, [filteredRows, checkedRows, doneRows]);
 
+    // Validation warnings (computed once, used by tab badge + UI)
+    const validationWarnings = useMemo(() => {
+        if (!currentSheet) return [];
+        const warnings: { type: "warn" | "error"; msg: string }[] = [];
+        const allRows = currentSheet.validRows;
+        const now = new Date();
+        const curYear = now.getFullYear();
+        const curMonth = now.getMonth() + 1;
+
+        if (cskcbMap.size > 0) {
+            const unknown = new Set<string>();
+            for (const r of allRows) { const ma = String(r.ma_cskcb || "").trim(); if (ma && !cskcbMap.has(ma)) unknown.add(ma); }
+            if (unknown.size > 0) warnings.push({ type: "warn", msg: `Mã CSKCB không có trong danh mục: ${[...unknown].join(", ")}` });
+        }
+        if (khoaMap.size > 0) {
+            const unknown = new Set<string>();
+            for (const r of allRows) { const ma = String(r.ma_khoa || "").trim(); if (ma && !khoaMap.has(ma)) unknown.add(ma); }
+            if (unknown.size > 0) warnings.push({ type: "warn", msg: `Mã khoa không có trong danh mục: ${[...unknown].join(", ")}` });
+        }
+        if (loaiKCBMap.size > 0) {
+            const unknown = new Set<string>();
+            for (const r of allRows) { const ma = Number(r.ma_loaikcb); if (!isNaN(ma) && ma > 0 && !loaiKCBMap.has(ma)) unknown.add(String(ma)); }
+            if (unknown.size > 0) warnings.push({ type: "warn", msg: `Mã loại KCB không có trong danh mục: ${[...unknown].join(", ")}` });
+        }
+        const futurePeriods = new Set<string>();
+        for (const r of allRows) {
+            const y = Number(r.nam_qt) || 0; const m = Number(r.thang_qt) || 0;
+            if (y > 0 && m > 0 && (y > curYear || (y === curYear && m > curMonth))) futurePeriods.add(`${m}/${y}`);
+        }
+        if (futurePeriods.size > 0) warnings.push({ type: "error", msg: `Kỳ quyết toán vượt quá tháng hiện tại (${curMonth}/${curYear}): ${[...futurePeriods].join(", ")}` });
+        return warnings;
+    }, [currentSheet, cskcbMap, khoaMap, loaiKCBMap]);
+
     // Row className for done rows (green background)
     const getRowClassName = (displayIdx: number): string => {
         const origIdx = selectionAdapter.get(displayIdx);
@@ -851,7 +884,7 @@ export default function TabImport() {
                                         : "font-medium text-gray-600 hover:text-gray-900"
                                         }`}
                                 >
-                                    📖 Xác thực dữ liệu
+                                    📖 Xác thực dữ liệu{validationWarnings.length > 0 && (<span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold bg-amber-400 text-white rounded-full leading-none">{validationWarnings.length}</span>)}
                                 </button>
                                 <button
                                     onClick={() => setSelectedTab("valid")}
@@ -1044,32 +1077,42 @@ export default function TabImport() {
 
                             return (
                                 <div className="px-4">
+                                    {/* Re-validate button */}
+                                    <div className="flex justify-end mb-3">
+                                        <button
+                                            onClick={handleValidate}
+                                            className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm cursor-pointer"
+                                        >
+                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                                            Xác thực lại
+                                        </button>
+                                    </div>
                                     {/* Table */}
                                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
                                         <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
                                             <thead>
                                                 {/* Row 1: Group headers */}
-                                                <tr className="text-xs font-bold uppercase tracking-wider text-center" style={{ background: "#ddd6f3" }}>
-                                                    <th className="py-3.5 px-5 text-left text-indigo-800 sticky left-0 z-10" style={{ background: "#ddd6f3" }}>
+                                                <tr className="text-xs font-bold uppercase tracking-wider text-center bg-primary-200">
+                                                    <th className="py-3.5 px-5 text-left text-primary-800 sticky left-0 z-10 bg-primary-200">
                                                         Kỳ
                                                     </th>
                                                     {pivot.ngoaiCskcb.length > 0 && (
-                                                        <th className="py-3 px-3 text-indigo-800" colSpan={pivot.ngoaiCskcb.length + 1}>
+                                                        <th className="py-3 px-3 text-primary-800" colSpan={pivot.ngoaiCskcb.length + 1}>
                                                             Ngoại trú
                                                         </th>
                                                     )}
                                                     {pivot.noiCskcb.length > 0 && (
-                                                        <th className="py-3 px-3 text-indigo-800" colSpan={pivot.noiCskcb.length + 1}>
+                                                        <th className="py-3 px-3 text-primary-800" colSpan={pivot.noiCskcb.length + 1}>
                                                             Nội trú
                                                         </th>
                                                     )}
-                                                    <th className="py-3.5 px-4 text-indigo-800 min-w-[100px]">
+                                                    <th className="py-3.5 px-4 text-primary-800 min-w-[100px]">
                                                         Tổng cộng
                                                     </th>
                                                 </tr>
                                                 {/* Row 2: Sub-headers */}
-                                                <tr className="text-xs font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200" style={{ background: "#ece8f5" }}>
-                                                    <th className="py-3 px-5 text-left italic font-semibold text-gray-500 sticky left-0" style={{ background: "#ece8f5" }}>
+                                                <tr className="text-xs font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200 bg-primary-100">
+                                                    <th className="py-3 px-5 text-left italic font-semibold text-gray-500 sticky left-0 bg-primary-100">
                                                         Cơ sở KCB
                                                     </th>
                                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
@@ -1156,82 +1199,24 @@ export default function TabImport() {
                                             </tfoot>
                                         </table>
                                     </div>
-                                </div>
-                            );
-                        })()}
 
-                        {/* ── Validation warnings ── */}
-                        {selectedTab === "summary" && currentSheet && (() => {
-                            const warnings: { type: "warn" | "error"; msg: string }[] = [];
-                            const allRows = currentSheet.validRows;
-                            const now = new Date();
-                            const curYear = now.getFullYear();
-                            const curMonth = now.getMonth() + 1;
-
-                            // Check unknown ma_cskcb
-                            if (cskcbMap.size > 0) {
-                                const unknownCskcb = new Set<string>();
-                                for (const r of allRows) {
-                                    const ma = String(r.ma_cskcb || "").trim();
-                                    if (ma && !cskcbMap.has(ma)) unknownCskcb.add(ma);
-                                }
-                                if (unknownCskcb.size > 0) {
-                                    warnings.push({ type: "warn", msg: `Mã CSKCB không có trong danh mục: ${[...unknownCskcb].join(", ")}` });
-                                }
-                            }
-
-                            // Check unknown ma_khoa
-                            if (khoaMap.size > 0) {
-                                const unknownKhoa = new Set<string>();
-                                for (const r of allRows) {
-                                    const ma = String(r.ma_khoa || "").trim();
-                                    if (ma && !khoaMap.has(ma)) unknownKhoa.add(ma);
-                                }
-                                if (unknownKhoa.size > 0) {
-                                    warnings.push({ type: "warn", msg: `Mã khoa không có trong danh mục: ${[...unknownKhoa].join(", ")}` });
-                                }
-                            }
-
-                            // Check unknown ma_loaikcb
-                            if (loaiKCBMap.size > 0) {
-                                const unknownLoai = new Set<string>();
-                                for (const r of allRows) {
-                                    const ma = Number(r.ma_loaikcb);
-                                    if (!isNaN(ma) && ma > 0 && !loaiKCBMap.has(ma)) unknownLoai.add(String(ma));
-                                }
-                                if (unknownLoai.size > 0) {
-                                    warnings.push({ type: "warn", msg: `Mã loại KCB không có trong danh mục: ${[...unknownLoai].join(", ")}` });
-                                }
-                            }
-
-                            // Check future periods
-                            const futurePeriods = new Set<string>();
-                            for (const r of allRows) {
-                                const y = Number(r.nam_qt) || 0;
-                                const m = Number(r.thang_qt) || 0;
-                                if (y > 0 && m > 0 && (y > curYear || (y === curYear && m > curMonth))) {
-                                    futurePeriods.add(`${m}/${y}`);
-                                }
-                            }
-                            if (futurePeriods.size > 0) {
-                                warnings.push({ type: "error", msg: `Kỳ quyết toán vượt quá tháng hiện tại (${curMonth}/${curYear}): ${[...futurePeriods].join(", ")}` });
-                            }
-
-                            if (warnings.length === 0) return null;
-                            return (
-                                <div className="mt-3 space-y-2">
-                                    {warnings.map((w, i) => (
-                                        <div
-                                            key={i}
-                                            className={`flex items-start gap-2 px-4 py-3 rounded-lg text-sm ${w.type === "error"
-                                                ? "bg-red-50 border border-red-200 text-red-700"
-                                                : "bg-amber-50 border border-amber-200 text-amber-700"
-                                                }`}
-                                        >
-                                            <span className="text-base mt-0.5">{w.type === "error" ? "🚨" : "⚠️"}</span>
-                                            <span>{w.msg}</span>
+                                    {/* Validation warnings (inside px-4 wrapper) */}
+                                    {validationWarnings.length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            {validationWarnings.map((w, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`flex items-start gap-2 px-4 py-3 rounded-lg text-sm ${w.type === "error"
+                                                        ? "bg-red-50 border border-red-200 text-red-700"
+                                                        : "bg-amber-50 border border-amber-200 text-amber-700"
+                                                        }`}
+                                                >
+                                                    <span className="text-base mt-0.5">{w.type === "error" ? "🚨" : "⚠️"}</span>
+                                                    <span>{w.msg}</span>
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
                             );
                         })()}
