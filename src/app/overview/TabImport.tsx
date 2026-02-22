@@ -1076,7 +1076,7 @@ export default function TabImport() {
                             );
 
                             return (
-                                <div className="px-4">
+                                <div className="px-4 pb-4">
                                     {/* Re-validate button */}
                                     <div className="flex justify-end mb-3">
                                         <button
