@@ -851,7 +851,7 @@ export default function TabImport() {
                                         : "font-medium text-gray-600 hover:text-gray-900"
                                         }`}
                                 >
-                                    📖 Tóm tắt dữ liệu
+                                    📖 Xác thực dữ liệu
                                 </button>
                                 <button
                                     onClick={() => setSelectedTab("valid")}
@@ -1043,24 +1043,9 @@ export default function TabImport() {
                             );
 
                             return (
-                                <div>
-                                    {/* Title bar */}
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-gray-900">Xác thực dữ liệu</h3>
-                                            <p className="text-sm text-gray-500 mt-0.5">Báo cáo chi tiết kiểm tra và đối chiếu dữ liệu Import</p>
-                                        </div>
-                                        <button
-                                            onClick={handleValidate}
-                                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
-                                        >
-                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
-                                            Xác thực lại
-                                        </button>
-                                    </div>
-
+                                <div className="px-4">
                                     {/* Table */}
-                                    <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                                    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
                                         <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
                                             <thead>
                                                 {/* Row 1: Group headers */}
@@ -1083,7 +1068,7 @@ export default function TabImport() {
                                                     </th>
                                                 </tr>
                                                 {/* Row 2: Sub-headers */}
-                                                <tr className="text-[11px] font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200" style={{ background: "#ece8f5" }}>
+                                                <tr className="text-xs font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200" style={{ background: "#ece8f5" }}>
                                                     <th className="py-3 px-5 text-left italic font-semibold text-gray-500 sticky left-0" style={{ background: "#ece8f5" }}>
                                                         Cơ sở KCB
                                                     </th>
