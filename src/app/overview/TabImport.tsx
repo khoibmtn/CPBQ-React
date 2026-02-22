@@ -1005,30 +1005,30 @@ export default function TabImport() {
 
                             const renderDataRow = (row: Record<string, number | string>, idx: number) => (
                                 <tr key={idx} className="hover:bg-gray-50/60 transition-colors border-b border-gray-100">
-                                    <td className="py-3.5 px-5 text-left text-gray-700 font-medium sticky left-0 bg-white">
+                                    <td className="py-2 px-3 text-left text-gray-700 font-medium sticky left-0 bg-white">
                                         {row.thang}
                                     </td>
                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
-                                        <td key={`ngoai-${c.ma}`} className="py-3.5 px-4 text-right text-gray-600">
+                                        <td key={`ngoai-${c.ma}`} className="py-2 px-3 text-right text-gray-600">
                                             {fmtNum(row[`ngoai_${c.ma}`] as number)}
                                         </td>
                                     ))}
                                     {pivot.ngoaiCskcb.length > 0 && (
-                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                        <td className="py-2 px-3 text-right font-bold text-indigo-600">
                                             {fmtNum(row["ngoai_tong"] as number)}
                                         </td>
                                     )}
                                     {pivot.noiCskcb.map((c: CskcbInfo) => (
-                                        <td key={`noi-${c.ma}`} className="py-3.5 px-4 text-right text-gray-600">
+                                        <td key={`noi-${c.ma}`} className="py-2 px-3 text-right text-gray-600">
                                             {fmtNum(row[`noi_${c.ma}`] as number)}
                                         </td>
                                     ))}
                                     {pivot.noiCskcb.length > 0 && (
-                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                        <td className="py-2 px-3 text-right font-bold text-indigo-600">
                                             {fmtNum(row["noi_tong"] as number)}
                                         </td>
                                     )}
-                                    <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                                    <td className="py-2 px-3 text-right font-bold text-gray-900">
                                         {fmtNum(row["tong_cong"] as number)}
                                     </td>
                                 </tr>
@@ -1036,7 +1036,7 @@ export default function TabImport() {
 
                             const renderSubtotalRow = (label: string, section: SectionPivot) => (
                                 <tr className="border-b border-gray-200 bg-white">
-                                    <td className="py-3.5 px-5 text-left font-bold text-gray-900 sticky left-0 bg-white">
+                                    <td className="py-2 px-3 text-left font-bold text-gray-900 sticky left-0 bg-white">
                                         {label}
                                     </td>
                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => {
@@ -1044,13 +1044,13 @@ export default function TabImport() {
                                             (s: number, r: Record<string, number | string>) => s + ((r[`ngoai_${c.ma}`] as number) || 0), 0
                                         );
                                         return (
-                                            <td key={`t-ngoai-${c.ma}`} className="py-3.5 px-4 text-right font-bold text-gray-800">
+                                            <td key={`t-ngoai-${c.ma}`} className="py-2 px-3 text-right font-bold text-gray-800">
                                                 {fmtNum(total)}
                                             </td>
                                         );
                                     })}
                                     {pivot.ngoaiCskcb.length > 0 && (
-                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                        <td className="py-2 px-3 text-right font-bold text-indigo-600">
                                             {fmtNum(section.grandNgoai)}
                                         </td>
                                     )}
@@ -1059,17 +1059,17 @@ export default function TabImport() {
                                             (s: number, r: Record<string, number | string>) => s + ((r[`noi_${c.ma}`] as number) || 0), 0
                                         );
                                         return (
-                                            <td key={`t-noi-${c.ma}`} className="py-3.5 px-4 text-right font-bold text-gray-800">
+                                            <td key={`t-noi-${c.ma}`} className="py-2 px-3 text-right font-bold text-gray-800">
                                                 {fmtNum(total)}
                                             </td>
                                         );
                                     })}
                                     {pivot.noiCskcb.length > 0 && (
-                                        <td className="py-3.5 px-4 text-right font-bold text-indigo-600">
+                                        <td className="py-2 px-3 text-right font-bold text-indigo-600">
                                             {fmtNum(section.grandNoi)}
                                         </td>
                                     )}
-                                    <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                                    <td className="py-2 px-3 text-right font-bold text-gray-900">
                                         {fmtNum(section.grandNgoai + section.grandNoi)}
                                     </td>
                                 </tr>
@@ -1081,9 +1081,9 @@ export default function TabImport() {
                                     <div className="flex justify-end mb-3">
                                         <button
                                             onClick={handleValidate}
-                                            className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm cursor-pointer"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-md transition-colors shadow-sm cursor-pointer"
                                         >
-                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
                                             Xác thực lại
                                         </button>
                                     </div>
@@ -1092,50 +1092,50 @@ export default function TabImport() {
                                         <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
                                             <thead>
                                                 {/* Row 1: Group headers */}
-                                                <tr className="text-xs font-bold uppercase tracking-wider text-center bg-primary-200">
-                                                    <th className="py-3.5 px-5 text-left text-primary-800 sticky left-0 z-10 bg-primary-200">
+                                                <tr className="text-[11px] font-bold uppercase tracking-wider text-center bg-primary-200">
+                                                    <th className="py-2 px-3 text-left text-primary-800 sticky left-0 z-10 bg-primary-200">
                                                         Kỳ
                                                     </th>
                                                     {pivot.ngoaiCskcb.length > 0 && (
-                                                        <th className="py-3 px-3 text-primary-800" colSpan={pivot.ngoaiCskcb.length + 1}>
+                                                        <th className="py-2 px-3 text-primary-800" colSpan={pivot.ngoaiCskcb.length + 1}>
                                                             Ngoại trú
                                                         </th>
                                                     )}
                                                     {pivot.noiCskcb.length > 0 && (
-                                                        <th className="py-3 px-3 text-primary-800" colSpan={pivot.noiCskcb.length + 1}>
+                                                        <th className="py-2 px-3 text-primary-800" colSpan={pivot.noiCskcb.length + 1}>
                                                             Nội trú
                                                         </th>
                                                     )}
-                                                    <th className="py-3.5 px-4 text-primary-800 min-w-[100px]">
+                                                    <th className="py-2 px-3 text-primary-800 min-w-[80px]">
                                                         Tổng cộng
                                                     </th>
                                                 </tr>
                                                 {/* Row 2: Sub-headers */}
-                                                <tr className="text-xs font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200 bg-primary-100">
-                                                    <th className="py-3 px-5 text-left italic font-semibold text-gray-500 sticky left-0 bg-primary-100">
+                                                <tr className="text-[11px] font-bold uppercase tracking-tight text-right text-gray-500 border-b border-gray-200 bg-primary-100">
+                                                    <th className="py-2 px-3 text-left italic font-semibold text-gray-500 sticky left-0 bg-primary-100">
                                                         Cơ sở KCB
                                                     </th>
                                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => (
-                                                        <th key={`h-ngoai-${c.ma}`} className="py-3 px-4 font-bold text-gray-700">{c.ten}</th>
+                                                        <th key={`h-ngoai-${c.ma}`} className="py-2 px-3 font-bold text-gray-700">{c.ten}</th>
                                                     ))}
                                                     {pivot.ngoaiCskcb.length > 0 && (
-                                                        <th className="py-3 px-4 text-indigo-600 font-bold">Tổng</th>
+                                                        <th className="py-2 px-3 text-indigo-600 font-bold">Tổng</th>
                                                     )}
                                                     {pivot.noiCskcb.map((c: CskcbInfo) => (
-                                                        <th key={`h-noi-${c.ma}`} className="py-3 px-4 font-bold text-gray-700">{c.ten}</th>
+                                                        <th key={`h-noi-${c.ma}`} className="py-2 px-3 font-bold text-gray-700">{c.ten}</th>
                                                     ))}
                                                     {pivot.noiCskcb.length > 0 && (
-                                                        <th className="py-3 px-4 text-indigo-600 font-bold">Tổng</th>
+                                                        <th className="py-2 px-3 text-indigo-600 font-bold">Tổng</th>
                                                     )}
-                                                    <th className="py-3 px-4 text-gray-700 font-bold">Toàn viện</th>
+                                                    <th className="py-2 px-3 text-gray-700 font-bold">Toàn viện</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="text-sm">
+                                            <tbody className="text-[13px]">
                                                 {/* Section: Hợp lệ */}
                                                 <tr style={{ background: "#e8f5e9" }}>
-                                                    <td className="py-2.5 px-5 font-bold text-emerald-700 uppercase tracking-tight sticky left-0 text-sm" style={{ background: "#e8f5e9" }} colSpan={1}>
+                                                    <td className="py-1.5 px-3 font-bold text-emerald-700 uppercase tracking-tight sticky left-0 text-[12px]" style={{ background: "#e8f5e9" }} colSpan={1}>
                                                         <span className="inline-flex items-center gap-1.5">
-                                                            <svg className="w-4 h-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                                                            <svg className="w-3.5 h-3.5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                                                             Hợp lệ
                                                         </span>
                                                     </td>
@@ -1146,9 +1146,9 @@ export default function TabImport() {
 
                                                 {/* Section: Trùng lặp */}
                                                 <tr style={{ background: "#fff3e0" }}>
-                                                    <td className="py-2.5 px-5 font-bold text-amber-700 uppercase tracking-tight sticky left-0 text-sm" style={{ background: "#fff3e0" }} colSpan={1}>
+                                                    <td className="py-1.5 px-3 font-bold text-amber-700 uppercase tracking-tight sticky left-0 text-[12px]" style={{ background: "#fff3e0" }} colSpan={1}>
                                                         <span className="inline-flex items-center gap-1.5">
-                                                            <svg className="w-4 h-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.5A2.5 2.5 0 014.5 2h6A2.5 2.5 0 0113 4.5V6h1.5A2.5 2.5 0 0117 8.5v7a2.5 2.5 0 01-2.5 2.5h-6A2.5 2.5 0 016 15.5V14H4.5A2.5 2.5 0 012 11.5v-7z" /></svg>
+                                                            <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.5A2.5 2.5 0 014.5 2h6A2.5 2.5 0 0113 4.5V6h1.5A2.5 2.5 0 0117 8.5v7a2.5 2.5 0 01-2.5 2.5h-6A2.5 2.5 0 016 15.5V14H4.5A2.5 2.5 0 012 11.5v-7z" /></svg>
                                                             Trùng lặp
                                                         </span>
                                                     </td>
@@ -1159,7 +1159,7 @@ export default function TabImport() {
                                             </tbody>
                                             <tfoot>
                                                 <tr className="border-t-[3px] border-indigo-400" style={{ background: "#ede7f6" }}>
-                                                    <td className="py-4 px-5 text-left font-bold text-indigo-700 text-base sticky left-0" style={{ background: "#ede7f6" }}>
+                                                    <td className="py-2.5 px-3 text-left font-bold text-indigo-700 text-sm sticky left-0" style={{ background: "#ede7f6" }}>
                                                         TỔNG CHUNG
                                                     </td>
                                                     {pivot.ngoaiCskcb.map((c: CskcbInfo) => {
@@ -1167,13 +1167,13 @@ export default function TabImport() {
                                                             (s: number, r: Record<string, number | string>) => s + ((r[`ngoai_${c.ma}`] as number) || 0), 0
                                                         );
                                                         return (
-                                                            <td key={`gt-ngoai-${c.ma}`} className="py-4 px-4 text-right font-bold text-indigo-700 text-base">
+                                                            <td key={`gt-ngoai-${c.ma}`} className="py-2.5 px-3 text-right font-bold text-indigo-700 text-sm">
                                                                 {fmtNum(total)}
                                                             </td>
                                                         );
                                                     })}
                                                     {pivot.ngoaiCskcb.length > 0 && (
-                                                        <td className="py-4 px-4 text-right font-bold text-indigo-600 text-base">
+                                                        <td className="py-2.5 px-3 text-right font-bold text-indigo-600 text-sm">
                                                             {fmtNum(pivot.total.grandNgoai)}
                                                         </td>
                                                     )}
@@ -1182,17 +1182,17 @@ export default function TabImport() {
                                                             (s: number, r: Record<string, number | string>) => s + ((r[`noi_${c.ma}`] as number) || 0), 0
                                                         );
                                                         return (
-                                                            <td key={`gt-noi-${c.ma}`} className="py-4 px-4 text-right font-bold text-indigo-700 text-base">
+                                                            <td key={`gt-noi-${c.ma}`} className="py-2.5 px-3 text-right font-bold text-indigo-700 text-sm">
                                                                 {fmtNum(total)}
                                                             </td>
                                                         );
                                                     })}
                                                     {pivot.noiCskcb.length > 0 && (
-                                                        <td className="py-4 px-4 text-right font-bold text-indigo-600 text-base">
+                                                        <td className="py-2.5 px-3 text-right font-bold text-indigo-600 text-sm">
                                                             {fmtNum(pivot.total.grandNoi)}
                                                         </td>
                                                     )}
-                                                    <td className="py-4 px-4 text-right font-extrabold text-indigo-700 text-base">
+                                                    <td className="py-2.5 px-3 text-right font-extrabold text-indigo-700 text-sm">
                                                         {fmtNum(pivot.total.grandNgoai + pivot.total.grandNoi)}
                                                     </td>
                                                 </tr>
