@@ -96,6 +96,11 @@ interface CskcbEntry {
     ten_cskcb: string;
 }
 
+interface KhoaEntry {
+    makhoa_xml: string;
+    full_name: string;
+}
+
 interface CskcbInfo {
     ma: string;
     ten: string;
@@ -132,6 +137,7 @@ export default function TabImport() {
     // Lookup tables for pivot summary
     const [loaiKCBMap, setLoaiKCBMap] = useState<Map<number, string>>(new Map());
     const [cskcbMap, setCskcbMap] = useState<Map<string, string>>(new Map());
+    const [khoaMap, setKhoaMap] = useState<Map<string, string>>(new Map());
     const [doneMode, setDoneMode] = useState<Record<number, "new" | "overwrite">>({});
     // Per-sheet state caches (survive sheet switches)
     const sheetDoneRows = useRef<Map<string, Set<number>>>(new Map());
@@ -172,7 +178,8 @@ export default function TabImport() {
         Promise.all([
             fetch("/api/bq/lookup?table=lookup_loaikcb").then((r) => r.json()),
             fetch("/api/bq/lookup?table=lookup_cskcb").then((r) => r.json()),
-        ]).then(([loaiRes, cskcbRes]) => {
+            fetch("/api/bq/lookup?table=lookup_khoa").then((r) => r.json()),
+        ]).then(([loaiRes, cskcbRes, khoaRes]) => {
             if (loaiRes.rows) {
                 const map = new Map<number, string>();
                 (loaiRes.rows as LoaiKCBEntry[]).forEach((r) => map.set(Number(r.ma_loaikcb), r.ml2));
@@ -182,6 +189,11 @@ export default function TabImport() {
                 const map = new Map<string, string>();
                 (cskcbRes.rows as CskcbEntry[]).forEach((r) => map.set(String(r.ma_cskcb), r.ten_cskcb));
                 setCskcbMap(map);
+            }
+            if (khoaRes.rows) {
+                const map = new Map<string, string>();
+                (khoaRes.rows as KhoaEntry[]).forEach((r) => map.set(String(r.makhoa_xml), r.full_name));
+                setKhoaMap(map);
             }
         }).catch(() => { /* ignore lookup errors */ });
     }, []);
@@ -1101,6 +1113,82 @@ export default function TabImport() {
                                             {renderSubtotalRow("TỔNG CHUNG", pivot.total, "bg-indigo-50", "bg-indigo-50")}
                                         </tfoot>
                                     </table>
+                                </div>
+                            );
+                        })()}
+
+                        {/* ── Validation warnings ── */}
+                        {selectedTab === "summary" && currentSheet && (() => {
+                            const warnings: { type: "warn" | "error"; msg: string }[] = [];
+                            const allRows = currentSheet.validRows;
+                            const now = new Date();
+                            const curYear = now.getFullYear();
+                            const curMonth = now.getMonth() + 1;
+
+                            // Check unknown ma_cskcb
+                            if (cskcbMap.size > 0) {
+                                const unknownCskcb = new Set<string>();
+                                for (const r of allRows) {
+                                    const ma = String(r.ma_cskcb || "").trim();
+                                    if (ma && !cskcbMap.has(ma)) unknownCskcb.add(ma);
+                                }
+                                if (unknownCskcb.size > 0) {
+                                    warnings.push({ type: "warn", msg: `Mã CSKCB không có trong danh mục: ${[...unknownCskcb].join(", ")}` });
+                                }
+                            }
+
+                            // Check unknown ma_khoa
+                            if (khoaMap.size > 0) {
+                                const unknownKhoa = new Set<string>();
+                                for (const r of allRows) {
+                                    const ma = String(r.ma_khoa || "").trim();
+                                    if (ma && !khoaMap.has(ma)) unknownKhoa.add(ma);
+                                }
+                                if (unknownKhoa.size > 0) {
+                                    warnings.push({ type: "warn", msg: `Mã khoa không có trong danh mục: ${[...unknownKhoa].join(", ")}` });
+                                }
+                            }
+
+                            // Check unknown ma_loaikcb
+                            if (loaiKCBMap.size > 0) {
+                                const unknownLoai = new Set<string>();
+                                for (const r of allRows) {
+                                    const ma = Number(r.ma_loaikcb);
+                                    if (!isNaN(ma) && ma > 0 && !loaiKCBMap.has(ma)) unknownLoai.add(String(ma));
+                                }
+                                if (unknownLoai.size > 0) {
+                                    warnings.push({ type: "warn", msg: `Mã loại KCB không có trong danh mục: ${[...unknownLoai].join(", ")}` });
+                                }
+                            }
+
+                            // Check future periods
+                            const futurePeriods = new Set<string>();
+                            for (const r of allRows) {
+                                const y = Number(r.nam_qt) || 0;
+                                const m = Number(r.thang_qt) || 0;
+                                if (y > 0 && m > 0 && (y > curYear || (y === curYear && m > curMonth))) {
+                                    futurePeriods.add(`${m}/${y}`);
+                                }
+                            }
+                            if (futurePeriods.size > 0) {
+                                warnings.push({ type: "error", msg: `Kỳ quyết toán vượt quá tháng hiện tại (${curMonth}/${curYear}): ${[...futurePeriods].join(", ")}` });
+                            }
+
+                            if (warnings.length === 0) return null;
+                            return (
+                                <div className="mt-3 space-y-2">
+                                    {warnings.map((w, i) => (
+                                        <div
+                                            key={i}
+                                            className={`flex items-start gap-2 px-4 py-3 rounded-lg text-sm ${w.type === "error"
+                                                    ? "bg-red-50 border border-red-200 text-red-700"
+                                                    : "bg-amber-50 border border-amber-200 text-amber-700"
+                                                }`}
+                                        >
+                                            <span className="text-base mt-0.5">{w.type === "error" ? "🚨" : "⚠️"}</span>
+                                            <span>{w.msg}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             );
                         })()}
