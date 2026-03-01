@@ -1,7 +1,7 @@
 "use client";
 import { Loader2, Trash2 } from "lucide-react";
 
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback, Fragment } from "react";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -21,7 +21,40 @@ interface SheetData {
     summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
 }
 
-type TabFilter = "summary" | "valid" | "duplicate";
+type TabFilter = "summary" | "valid" | "duplicate" | "normalize";
+
+interface SubBreakdown {
+    label: string;
+    count: number;
+    cost: number;
+}
+
+interface NormalizeComparison {
+    ma_cskcb: string;
+    ten_cskcb: string;
+    thang_qt: number;
+    nam_qt: number;
+    bqCount: number;
+    excelCount: number;
+    dupCount: number;
+    bqOnlyCount: number;
+    excelOnlyCount: number;
+    diff: number;
+    bqCost: number;
+    excelCost: number;
+    bqSubs: SubBreakdown[];
+    excelSubs: SubBreakdown[];
+    bqNormalized: number;
+    bqRaw: number;
+}
+
+interface NormalizeResult {
+    ma_cskcb: string;
+    thang_qt: number;
+    nam_qt: number;
+    deleted: number;
+    inserted: number;
+}
 
 /* ── Column config ── */
 
@@ -44,7 +77,7 @@ const COL_LABELS: Record<string, string> = {
     ma_cskcb: "Mã CSKCB", noi_ttoan: "Nơi thanh toán", giam_dinh: "Giám định",
     t_xuattoan: "Xuất toán", t_nguonkhac: "Nguồn khác",
     t_datuyen: "Đa tuyến", t_vuottran: "Vượt trần",
-    _status: "Trạng thái",
+    _status: "Trạng thái", is_normalized: "Chuẩn hóa",
 };
 
 /** Money / amount columns → align right */
@@ -73,6 +106,12 @@ const ALL_COLS: Column[] = [
         ...(key === "gioi_tinh" ? { width: 40 } : {}),
     })),
     { key: "_status", label: "Trạng thái", align: "center", width: 80 },
+    {
+        key: "is_normalized", label: "Chuẩn hóa", align: "center", width: 70, render: (val) => {
+            const v = val === true || val === "true" || val === 1 || val === "1";
+            return v ? <span className="text-green-600 font-bold">x</span> : "";
+        }
+    },
 ];
 
 /** Columns always visible and non-toggleable */
@@ -81,7 +120,7 @@ const PINNED_KEYS = new Set(["stt", "_status"]);
 /** Default visible columns (compact view) */
 const DEFAULT_VISIBLE_KEYS = new Set([
     "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh", "ma_cskcb",
-    "ngay_vao", "ngay_ra", "t_tongchi", "t_bhtt", "_status",
+    "ngay_vao", "ngay_ra", "t_tongchi", "t_bhtt", "_status", "is_normalized",
 ]);
 
 /* ── Lookup types ── */
@@ -126,6 +165,7 @@ export default function TabImport() {
     const [sheets, setSheets] = useState<SheetData[]>([]);
     const [selectedSheet, setSelectedSheet] = useState("");
     const [selectedTab, setSelectedTab] = useState<TabFilter>("valid");
+    const [sheetUpdating, setSheetUpdating] = useState(false);
     const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
     const [removedRows, setRemovedRows] = useState<Set<number>>(new Set());
     const [searchKeyword, setSearchKeyword] = useState("");
@@ -133,6 +173,16 @@ export default function TabImport() {
     const [uploadMsgs, setUploadMsgs] = useState<Map<string, string>>(new Map());
     // Tracks rows that have been successfully uploaded/overwritten (by original index)
     const [doneRows, setDoneRows] = useState<Set<number>>(new Set());
+
+    // ── Normalize tab state ──
+    const [normalizeData, setNormalizeData] = useState<NormalizeComparison[]>([]);
+    const [normalizeChecked, setNormalizeChecked] = useState<Set<string>>(new Set());
+    const [normalizeLoading, setNormalizeLoading] = useState(false);
+    const [normalizeResults, setNormalizeResults] = useState<NormalizeResult[] | null>(null);
+    const [normalizeError, setNormalizeError] = useState<string | null>(null);
+    const [showNormalizeConfirm, setShowNormalizeConfirm] = useState(false);
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const normalizeCompared = useRef(false);
 
     // Lookup tables for pivot summary
     const [loaiKCBMap, setLoaiKCBMap] = useState<Map<number, string>>(new Map());
@@ -293,8 +343,8 @@ export default function TabImport() {
         const dupRows = allRows.filter((r) => r._isDuplicate);
 
         const sections: { label: string; data: SectionPivot }[] = [
-            { label: "HỢP LỆ", data: buildSection(validRows) },
-            { label: "TRÙNG LẶP", data: buildSection(dupRows) },
+            { label: "BỆNH NHÂN MỚI", data: buildSection(validRows) },
+            { label: "BỆNH NHÂN TRÙNG LẶP", data: buildSection(dupRows) },
         ];
         const total = buildSection(allRows);
 
@@ -382,6 +432,7 @@ export default function TabImport() {
                 });
 
                 let dupIndices = new Set<number>();
+                let normalizedStatus: Record<number, boolean> = {};
                 try {
                     const res = await fetch("/api/bq/overview/import", {
                         method: "POST",
@@ -391,14 +442,16 @@ export default function TabImport() {
                     const d = await res.json();
                     if (d.error) throw new Error(d.error);
                     dupIndices = new Set<number>(d.duplicateIndices || []);
+                    normalizedStatus = d.normalizedStatus || {};
                 } catch {
                     // BQ unreachable — treat all as new
                 }
 
-                // Add _isDuplicate flag to display rows
+                // Add _isDuplicate and is_normalized flags to display rows
                 const displayRows = ps.validRows.map((row, i) => ({
                     ...row,
                     _isDuplicate: dupIndices.has(i),
+                    is_normalized: !!normalizedStatus[i],
                 }));
 
                 allSheets.push({
@@ -546,8 +599,18 @@ export default function TabImport() {
         }
 
         setSelectedSheet(name);
-        setSelectedTab("summary");
+        // Keep current selectedTab — don't reset to "summary"
         setSearchKeyword("");
+        // Reset normalize state so it re-fetches for the new sheet
+        setNormalizeData([]);
+        setNormalizeChecked(new Set());
+        setNormalizeResults(null);
+        setNormalizeError(null);
+        setExpandedGroups(new Set());
+        normalizeCompared.current = false;
+        // Flash updating indicator on tabs
+        setSheetUpdating(true);
+        setTimeout(() => setSheetUpdating(false), 600);
         // uploadMsgs intentionally NOT cleared on sheet switch — persists per sheet+tab
 
         // Restore saved state for target sheet, or initialize defaults
@@ -710,6 +773,12 @@ export default function TabImport() {
     const getRowClassName = (displayIdx: number): string => {
         const origIdx = selectionAdapter.get(displayIdx);
         if (origIdx !== undefined && doneRows.has(origIdx)) return "row-done";
+        // Green text for normalized rows
+        const row = filteredRows[displayIdx];
+        if (row) {
+            const v = row.is_normalized;
+            if (v === true || v === "true" || v === 1 || v === "1") return "text-blue-600";
+        }
         return "";
     };
 
@@ -729,6 +798,170 @@ export default function TabImport() {
         });
     };
 
+    /* ── Normalize: compare ── */
+    const handleNormalizeCompare = useCallback(async () => {
+        if (!currentSheet || normalizeCompared.current) return;
+        setNormalizeLoading(true);
+        setNormalizeError(null);
+        setNormalizeResults(null);
+
+        try {
+            const allRows = currentSheet.validRows;
+            // Group rows by ma_cskcb + thang_qt + nam_qt
+            const groupMap = new Map<string, { ma_cskcb: string; thang_qt: number; nam_qt: number; rows: Record<string, unknown>[]; keys: string[]; cost: number; subs: Map<string, { count: number; cost: number }> }>();
+            for (const row of allRows) {
+                const ma = String(row.ma_cskcb || "");
+                const thang = Number(row.thang_qt) || 0;
+                const nam = Number(row.nam_qt) || 0;
+                if (!ma || !thang || !nam) continue;
+                const gid = `${ma}|${thang}|${nam}`;
+                if (!groupMap.has(gid)) {
+                    groupMap.set(gid, { ma_cskcb: ma, thang_qt: thang, nam_qt: nam, rows: [], keys: [], cost: 0, subs: new Map() });
+                }
+                const g = groupMap.get(gid)!;
+                g.rows.push(row);
+                // Build composite key for duplicate detection
+                const key = ["ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra"]
+                    .map((c) => String(row[c] ?? "")).join("|");
+                g.keys.push(key);
+                g.cost += Number(row.t_tongchi) || 0;
+                // Track sub-breakdown by nội trú / ngoại trú
+                const ml = Number(row.ma_loaikcb);
+                const subLabel = loaiKCBMap.get(ml) || (ml === 1 ? "Nội trú" : "Ngoại trú");
+                if (!g.subs.has(subLabel)) g.subs.set(subLabel, { count: 0, cost: 0 });
+                const sub = g.subs.get(subLabel)!;
+                sub.count++;
+                sub.cost += Number(row.t_tongchi) || 0;
+            }
+
+            const groups = Array.from(groupMap.values()).map((g) => ({
+                ma_cskcb: g.ma_cskcb, thang_qt: g.thang_qt, nam_qt: g.nam_qt,
+            }));
+            const excelKeys: Record<string, { keys: string[]; count: number; cost: number; subs: { label: string; count: number; cost: number }[] }> = {};
+            for (const [gid, g] of groupMap) {
+                excelKeys[gid] = {
+                    keys: g.keys,
+                    count: g.rows.length,
+                    cost: g.cost,
+                    subs: Array.from(g.subs.entries()).map(([label, v]) => ({ label, ...v })),
+                };
+            }
+
+            const res = await fetch("/api/bq/overview/normalize", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "compare", groups, excelKeys }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            const comparisons: NormalizeComparison[] = (data.comparisons || []).map(
+                (c: NormalizeComparison) => ({
+                    ...c,
+                    ten_cskcb: cskcbMap.get(c.ma_cskcb) || c.ma_cskcb,
+                })
+            );
+            setNormalizeData(comparisons);
+            // Auto-check groups that have differences
+            const autoChecked = new Set<string>();
+            for (const c of comparisons) {
+                if (c.diff !== 0 || c.bqOnlyCount > 0 || c.excelOnlyCount > 0) {
+                    autoChecked.add(`${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`);
+                }
+            }
+            setNormalizeChecked(autoChecked);
+            normalizeCompared.current = true;
+        } catch (e: unknown) {
+            setNormalizeError(e instanceof Error ? e.message : "Unknown error");
+        } finally {
+            setNormalizeLoading(false);
+        }
+    }, [currentSheet, cskcbMap]);
+
+    /* ── Normalize: execute ── */
+    const handleNormalizeExecute = async () => {
+        if (!currentSheet || normalizeChecked.size === 0) return;
+        setShowNormalizeConfirm(false);
+        setNormalizeLoading(true);
+        setNormalizeError(null);
+
+        try {
+            const allRows = currentSheet.validRows;
+            // Get cached transformed rows for upload
+            const cachedRows = parsedSheetRows.current.get(selectedSheet) || [];
+
+            // Build groups with full row data
+            const groups: { ma_cskcb: string; thang_qt: number; nam_qt: number; rows: Record<string, unknown>[] }[] = [];
+
+            for (const gid of normalizeChecked) {
+                const [ma, thang, nam] = gid.split("|");
+                const groupRows = allRows
+                    .filter((r) =>
+                        String(r.ma_cskcb) === ma &&
+                        Number(r.thang_qt) === Number(thang) &&
+                        Number(r.nam_qt) === Number(nam)
+                    )
+                    .map((r) => {
+                        const idx = r._idx as number;
+                        return cachedRows[idx] || r;
+                    });
+                groups.push({ ma_cskcb: ma, thang_qt: Number(thang), nam_qt: Number(nam), rows: groupRows });
+            }
+
+            // Send in chunks per group (each group sent as a single request)
+            const allResults: NormalizeResult[] = [];
+            for (const group of groups) {
+                const CHUNK_SIZE = 1500;
+                const chunks: Record<string, unknown>[][] = [];
+                for (let i = 0; i < group.rows.length; i += CHUNK_SIZE) {
+                    chunks.push(group.rows.slice(i, i + CHUNK_SIZE));
+                }
+
+                // First chunk does the DELETE + INSERT
+                let totalInserted = 0;
+                let totalDeleted = 0;
+                for (let ci = 0; ci < chunks.length; ci++) {
+                    const payload = ci === 0
+                        ? { action: "execute", groups: [{ ...group, rows: chunks[ci] }] }
+                        : { action: "execute", groups: [{ ...group, rows: chunks[ci], skipDelete: true }] };
+                    const res = await fetch("/api/bq/overview/normalize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
+                    if (data.results?.[0]) {
+                        totalInserted += data.results[0].inserted || 0;
+                        totalDeleted += data.results[0].deleted || 0;
+                    }
+                }
+                allResults.push({
+                    ma_cskcb: group.ma_cskcb,
+                    thang_qt: group.thang_qt,
+                    nam_qt: group.nam_qt,
+                    deleted: totalDeleted,
+                    inserted: totalInserted,
+                });
+            }
+
+            setNormalizeResults(allResults);
+            // Refresh comparison data
+            normalizeCompared.current = false;
+        } catch (e: unknown) {
+            setNormalizeError(e instanceof Error ? e.message : "Unknown error");
+        } finally {
+            setNormalizeLoading(false);
+        }
+    };
+
+    // Auto-trigger compare when switching to normalize tab
+    useEffect(() => {
+        if (selectedTab === "normalize" && currentSheet && !normalizeCompared.current) {
+            handleNormalizeCompare();
+        }
+    }, [selectedTab, currentSheet, handleNormalizeCompare]);
+
     /* ── Reset ── */
     const handleReset = () => {
         setFile(null);
@@ -740,16 +973,21 @@ export default function TabImport() {
         setDoneRows(new Set());
         setDoneMode({});
         setSearchKeyword("");
+        setNormalizeData([]);
+        setNormalizeChecked(new Set());
+        setNormalizeResults(null);
+        setNormalizeError(null);
+        normalizeCompared.current = false;
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     return (
         <div className="flex flex-col gap-6">
-            <SectionTitle icon="📥">Import dữ liệu Excel lên BigQuery</SectionTitle>
 
             <InfoBanner type="info">
-                Upload file Excel chứa dữ liệu thanh toán BHYT. Hệ thống sẽ tự động
-                phát hiện sheet, kiểm tra cấu trúc, xác nhận trùng lặp trước khi tải lên.
+                <span className="font-bold">Import dữ liệu từ file excel theo mẫu C79,80b-HD (CV3360) vào data lưu trên BigQuery.</span>
+                <br />
+                Hệ thống tự động phát hiện các sheet có định dạng phù hợp với file excel mẫu. Lần lượt chọn từng sheet (nếu hợp lệ), kiểm tra tổng quan số lượng nội trú, ngoại trú của từng cơ sở. Lựa chọn chức năng bổ sung mới, thay thế bản ghi trùng lặp hoặc thay thế theo tháng quyết toán (chức năng chuẩn hóa dữ liệu).
             </InfoBanner>
 
             {error && <InfoBanner type="error">❌ {error}</InfoBanner>}
@@ -771,7 +1009,7 @@ export default function TabImport() {
                     />
                     <div className="upload-placeholder">
                         <span className="upload-icon">📤</span>
-                        <p>Kéo thả file Excel hoặc click để chọn</p>
+                        <p>Kéo thả hoặc click chọn file Excel theo mẫu C79,80b-HD (CV 3360)</p>
                         <small>.xlsx, .xls</small>
                     </div>
                 </div>
@@ -884,7 +1122,7 @@ export default function TabImport() {
                                         : "font-medium text-gray-600 hover:text-gray-900"
                                         }`}
                                 >
-                                    📖 Xác thực dữ liệu{validationWarnings.length > 0 && (<span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold bg-amber-400 text-white rounded-full leading-none">{validationWarnings.length}</span>)}
+                                    📖 Xác thực dữ liệu{sheetUpdating && (<Loader2 className="w-3 h-3 animate-spin text-gray-400" />)}{!sheetUpdating && validationWarnings.length > 0 && (<span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold bg-amber-400 text-white rounded-full leading-none">{validationWarnings.length}</span>)}
                                 </button>
                                 <button
                                     onClick={() => setSelectedTab("valid")}
@@ -893,7 +1131,7 @@ export default function TabImport() {
                                         : "font-medium text-gray-600 hover:text-gray-900"
                                         }`}
                                 >
-                                    ✅ Hợp lệ ({validCount})
+                                    ✅ Bệnh nhân mới ({validCount}){sheetUpdating && (<Loader2 className="w-3 h-3 animate-spin text-gray-400" />)}
                                 </button>
                                 <button
                                     onClick={() => setSelectedTab("duplicate")}
@@ -902,12 +1140,21 @@ export default function TabImport() {
                                         : "font-medium text-gray-600 hover:text-gray-900"
                                         }`}
                                 >
-                                    📋 Trùng lặp ({dupCount})
+                                    📋 Bệnh nhân trùng lặp ({dupCount}){sheetUpdating && (<Loader2 className="w-3 h-3 animate-spin text-gray-400" />)}
+                                </button>
+                                <button
+                                    onClick={() => { setSelectedTab("normalize"); normalizeCompared.current = false; }}
+                                    className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-1.5 cursor-pointer ${selectedTab === "normalize"
+                                        ? "font-bold text-teal-600 bg-white shadow-sm"
+                                        : "font-medium text-gray-600 hover:text-gray-900"
+                                        }`}
+                                >
+                                    🔄 Chuẩn hóa dữ liệu{(sheetUpdating || normalizeLoading) && (<Loader2 className="w-3 h-3 animate-spin text-gray-400" />)}
                                 </button>
                             </div>
 
                             {/* Search + Column Config + Delete (data tabs only) */}
-                            {selectedTab !== "summary" && (
+                            {selectedTab !== "summary" && selectedTab !== "normalize" && (
                                 <div className="flex items-center gap-2 w-full sm:w-auto">
                                     <div className="relative flex-1 sm:w-60">
                                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
@@ -1136,26 +1383,26 @@ export default function TabImport() {
                                                     <td className="py-1.5 px-3 font-bold text-emerald-700 uppercase tracking-tight sticky left-0 text-[12px]" style={{ background: "#e8f5e9" }} colSpan={1}>
                                                         <span className="inline-flex items-center gap-1.5">
                                                             <svg className="w-3.5 h-3.5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                                                            Hợp lệ
+                                                            Bệnh nhân mới
                                                         </span>
                                                     </td>
                                                     <td colSpan={totalCols - 1} style={{ background: "#e8f5e9" }} />
                                                 </tr>
                                                 {pivot.sections[0].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
-                                                {renderSubtotalRow("TỔNG HỢP LỆ", pivot.sections[0].data)}
+                                                {renderSubtotalRow("TỔNG BN MỚI", pivot.sections[0].data)}
 
                                                 {/* Section: Trùng lặp */}
                                                 <tr style={{ background: "#fff3e0" }}>
                                                     <td className="py-1.5 px-3 font-bold text-amber-700 uppercase tracking-tight sticky left-0 text-[12px]" style={{ background: "#fff3e0" }} colSpan={1}>
                                                         <span className="inline-flex items-center gap-1.5">
                                                             <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.5A2.5 2.5 0 014.5 2h6A2.5 2.5 0 0113 4.5V6h1.5A2.5 2.5 0 0117 8.5v7a2.5 2.5 0 01-2.5 2.5h-6A2.5 2.5 0 016 15.5V14H4.5A2.5 2.5 0 012 11.5v-7z" /></svg>
-                                                            Trùng lặp
+                                                            Bệnh nhân trùng lặp
                                                         </span>
                                                     </td>
                                                     <td colSpan={totalCols - 1} style={{ background: "#fff3e0" }} />
                                                 </tr>
                                                 {pivot.sections[1].data.pivotRows.map((row, idx) => renderDataRow(row, idx))}
-                                                {renderSubtotalRow("TỔNG TRÙNG LẶP", pivot.sections[1].data)}
+                                                {renderSubtotalRow("TỔNG BN TRÙNG LẶP", pivot.sections[1].data)}
                                             </tbody>
                                             <tfoot>
                                                 <tr className="border-t-[3px] border-indigo-400" style={{ background: "#ede7f6" }}>
@@ -1222,7 +1469,7 @@ export default function TabImport() {
                         })()}
 
                         {/* ── Tab content: Data tables (valid / duplicate) ── */}
-                        {selectedTab !== "summary" && (
+                        {selectedTab !== "summary" && selectedTab !== "normalize" && (
                             <>
                                 <DataTable
                                     columns={displayColumns}
@@ -1273,6 +1520,270 @@ export default function TabImport() {
                                     )}
                                 </div>
                             </>
+                        )}
+
+                        {/* ── Tab content: Normalize ── */}
+                        {selectedTab === "normalize" && (
+                            <div className="px-4 pb-4">
+                                {normalizeLoading && !normalizeData.length && (
+                                    <div className="flex items-center justify-center gap-2 py-12 text-gray-500">
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Đang so sánh dữ liệu với BigQuery...</span>
+                                    </div>
+                                )}
+
+                                {normalizeError && (
+                                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                                        ❌ {normalizeError}
+                                    </div>
+                                )}
+
+                                {/* Success results */}
+                                {normalizeResults && (
+                                    <div className="mb-4 space-y-2">
+                                        <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+                                            <p className="font-bold text-green-700 text-sm mb-2">✅ Chuẩn hóa thành công!</p>
+                                            {normalizeResults.map((r, i) => (
+                                                <p key={i} className="text-green-600 text-sm">
+                                                    • {r.ma_cskcb} — Kỳ {r.thang_qt}/{r.nam_qt}: Xóa {r.deleted.toLocaleString()}, thêm {r.inserted.toLocaleString()} bản ghi
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Comparison table */}
+                                {normalizeData.length > 0 && (
+                                    <>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-sm text-gray-500">So sánh số liệu Excel với BigQuery theo CSKCB và kỳ quyết toán</p>
+                                            <button
+                                                onClick={() => { normalizeCompared.current = false; handleNormalizeCompare(); }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white text-xs font-semibold rounded-md transition-colors shadow-sm cursor-pointer"
+                                            >
+                                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                                                So sánh lại
+                                            </button>
+                                        </div>
+                                        <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+                                            <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                                <thead>
+                                                    <tr className="text-[11px] font-bold uppercase tracking-wider text-center bg-teal-100">
+                                                        <th className="py-2 px-3 text-left text-teal-800 w-10">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={normalizeData.length > 0 && normalizeChecked.size === normalizeData.length}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setNormalizeChecked(new Set(normalizeData.map((c) => `${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`)));
+                                                                    } else {
+                                                                        setNormalizeChecked(new Set());
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </th>
+                                                        <th className="py-2 px-2 text-left text-teal-800 whitespace-nowrap w-[1%]">CSKCB</th>
+                                                        <th className="py-2 px-3 text-left text-teal-800 whitespace-nowrap min-w-[160px]">Tên CSKCB</th>
+                                                        <th className="py-2 px-2 text-teal-800 whitespace-nowrap w-[1%]">Kỳ QT</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Data lưu</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Excel mới</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Trùng</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Chỉ Data lưu</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Chỉ Excel</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Chênh lệch</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">CP Data lưu</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">CP Excel</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Chuẩn hóa</th>
+                                                        <th className="py-2 px-3 text-right text-teal-800 whitespace-nowrap">Chưa chuẩn hóa</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="text-[13px]">
+                                                    {normalizeData.map((c, i) => {
+                                                        const gid = `${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`;
+                                                        const isChecked = normalizeChecked.has(gid);
+                                                        const isExpanded = expandedGroups.has(gid);
+                                                        // Merge sub labels from both BQ and Excel
+                                                        const allLabels = new Set([
+                                                            ...(c.bqSubs || []).map((s) => s.label),
+                                                            ...(c.excelSubs || []).map((s) => s.label),
+                                                        ]);
+                                                        const subLabels = ["Nội trú", "Ngoại trú"].filter((l) => allLabels.has(l));
+                                                        return (
+                                                            <Fragment key={i}>
+                                                                <tr className={`border-b border-gray-100 transition-colors ${isChecked ? "bg-teal-50" : "hover:bg-gray-50/60"}`}>
+                                                                    <td className="py-2 px-3">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                setNormalizeChecked((prev) => {
+                                                                                    const next = new Set(prev);
+                                                                                    if (next.has(gid)) next.delete(gid);
+                                                                                    else next.add(gid);
+                                                                                    return next;
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="py-2 px-2 text-gray-700 font-mono text-xs whitespace-nowrap">{c.ma_cskcb}</td>
+                                                                    <td
+                                                                        className="py-2 px-3 text-gray-700 font-medium cursor-pointer select-none"
+                                                                        onClick={() => {
+                                                                            setExpandedGroups((prev) => {
+                                                                                const next = new Set(prev);
+                                                                                if (next.has(gid)) next.delete(gid);
+                                                                                else next.add(gid);
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        <span className="inline-flex items-center gap-1.5">
+                                                                            <span className={`text-[10px] text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}>▶</span>
+                                                                            {c.ten_cskcb}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-2 px-2 text-center text-gray-700 font-medium whitespace-nowrap">{c.thang_qt}/{c.nam_qt}</td>
+                                                                    <td className="py-2 px-3 text-right text-gray-600">{c.bqCount.toLocaleString()}</td>
+                                                                    <td className="py-2 px-3 text-right text-gray-600">{c.excelCount.toLocaleString()}</td>
+                                                                    <td className="py-2 px-3 text-right text-gray-500">{c.dupCount.toLocaleString()}</td>
+                                                                    <td className="py-2 px-3 text-right text-red-500 font-medium">{c.bqOnlyCount > 0 ? `-${c.bqOnlyCount.toLocaleString()}` : "—"}</td>
+                                                                    <td className="py-2 px-3 text-right text-emerald-600 font-medium">{c.excelOnlyCount > 0 ? `+${c.excelOnlyCount.toLocaleString()}` : "—"}</td>
+                                                                    <td className={`py-2 px-3 text-right font-bold ${c.diff > 0 ? "text-emerald-600" : c.diff < 0 ? "text-red-500" : "text-gray-400"}`}>
+                                                                        {c.diff > 0 ? `+${c.diff.toLocaleString()}` : c.diff === 0 ? "—" : c.diff.toLocaleString()}
+                                                                    </td>
+                                                                    <td className="py-2 px-3 text-right text-gray-600 text-xs font-mono">{c.bqCost ? Math.round(c.bqCost).toLocaleString() : "—"}</td>
+                                                                    <td className="py-2 px-3 text-right text-gray-600 text-xs font-mono">{c.excelCost ? Math.round(c.excelCost).toLocaleString() : "—"}</td>
+                                                                    <td className="py-2 px-3 text-right text-blue-600 text-xs font-medium">{c.bqNormalized > 0 ? c.bqNormalized.toLocaleString() : "—"}</td>
+                                                                    <td className="py-2 px-3 text-right text-orange-500 text-xs font-medium">{c.bqRaw > 0 ? c.bqRaw.toLocaleString() : "—"}</td>
+                                                                </tr>
+                                                                {isExpanded && subLabels.map((label) => {
+                                                                    const bqSub = (c.bqSubs || []).find((s) => s.label === label);
+                                                                    const excelSub = (c.excelSubs || []).find((s) => s.label === label);
+                                                                    const bqC = bqSub?.count || 0;
+                                                                    const exC = excelSub?.count || 0;
+                                                                    const subDiff = exC - bqC;
+                                                                    return (
+                                                                        <tr key={`${gid}-${label}`} className="bg-gray-50/50 border-b border-gray-50">
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3 text-gray-500 text-xs pl-10">
+                                                                                {label === "Nội trú" ? "🏥" : "🚶"} {label}
+                                                                            </td>
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3 text-right text-gray-500 text-xs">{bqC.toLocaleString()}</td>
+                                                                            <td className="py-1.5 px-3 text-right text-gray-500 text-xs">{exC.toLocaleString()}</td>
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className={`py-1.5 px-3 text-right text-xs font-medium ${subDiff > 0 ? "text-emerald-500" : subDiff < 0 ? "text-red-400" : "text-gray-400"}`}>
+                                                                                {subDiff > 0 ? `+${subDiff.toLocaleString()}` : subDiff === 0 ? "—" : subDiff.toLocaleString()}
+                                                                            </td>
+                                                                            <td className="py-1.5 px-3 text-right text-gray-500 text-[11px] font-mono">{bqSub?.cost ? Math.round(bqSub.cost).toLocaleString() : "—"}</td>
+                                                                            <td className="py-1.5 px-3 text-right text-gray-500 text-[11px] font-mono">{excelSub?.cost ? Math.round(excelSub.cost).toLocaleString() : "—"}</td>
+                                                                            <td className="py-1.5 px-3" />
+                                                                            <td className="py-1.5 px-3" />
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </Fragment>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                                {normalizeData.length > 1 && (
+                                                    <tfoot>
+                                                        <tr className="border-t-2 border-teal-300 bg-teal-50 font-bold text-[13px]">
+                                                            <td className="py-2 px-3" />
+                                                            <td className="py-2 px-3 text-teal-800">TỔNG</td>
+                                                            <td className="py-2 px-3 text-teal-800">{new Set(normalizeData.map(c => c.ma_cskcb)).size} CSKCB</td>
+                                                            <td className="py-2 px-3 text-right text-teal-800">{new Set(normalizeData.map(c => `${c.thang_qt}/${c.nam_qt}`)).size} kỳ</td>
+                                                            <td className="py-2 px-3 text-right text-teal-800">{normalizeData.reduce((s, c) => s + c.bqCount, 0).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-teal-800">{normalizeData.reduce((s, c) => s + c.excelCount, 0).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-teal-700">{normalizeData.reduce((s, c) => s + c.dupCount, 0).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-red-500">
+                                                                {(() => { const v = normalizeData.reduce((s, c) => s + c.bqOnlyCount, 0); return v > 0 ? `-${v.toLocaleString()}` : "—"; })()}
+                                                            </td>
+                                                            <td className="py-2 px-3 text-right text-emerald-600">
+                                                                {(() => { const v = normalizeData.reduce((s, c) => s + c.excelOnlyCount, 0); return v > 0 ? `+${v.toLocaleString()}` : "—"; })()}
+                                                            </td>
+                                                            <td className={`py-2 px-3 text-right ${(() => { const d = normalizeData.reduce((s, c) => s + c.diff, 0); return d > 0 ? "text-emerald-600" : d < 0 ? "text-red-500" : "text-gray-400"; })()}`}>
+                                                                {(() => { const d = normalizeData.reduce((s, c) => s + c.diff, 0); return d > 0 ? `+${d.toLocaleString()}` : d === 0 ? "—" : d.toLocaleString(); })()}
+                                                            </td>
+                                                            <td className="py-2 px-3 text-right text-teal-800 text-xs font-mono">{Math.round(normalizeData.reduce((s, c) => s + c.bqCost, 0)).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-teal-800 text-xs font-mono">{Math.round(normalizeData.reduce((s, c) => s + c.excelCost, 0)).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-blue-600 text-xs font-bold">{normalizeData.reduce((s, c) => s + c.bqNormalized, 0).toLocaleString()}</td>
+                                                            <td className="py-2 px-3 text-right text-orange-500 text-xs font-bold">{normalizeData.reduce((s, c) => s + c.bqRaw, 0).toLocaleString()}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                )}
+                                            </table>
+                                        </div>
+
+                                        {/* Normalize action bar */}
+                                        <div className="mt-4 flex items-center justify-center">
+                                            <button
+                                                className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold rounded-xl bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                                                onClick={() => setShowNormalizeConfirm(true)}
+                                                disabled={normalizeLoading || normalizeChecked.size === 0}
+                                            >
+                                                {normalizeLoading ? (
+                                                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý...</>
+                                                ) : (
+                                                    `🔄 Chuẩn hóa (${normalizeChecked.size} kỳ)`
+                                                )}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {!normalizeLoading && normalizeData.length === 0 && !normalizeError && (
+                                    <div className="py-12 text-center text-gray-400">
+                                        Không có dữ liệu để so sánh. Hãy đảm bảo file Excel đã được xác thực.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Normalize confirmation dialog ── */}
+                        {showNormalizeConfirm && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNormalizeConfirm(false)}>
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                    <div className="px-6 py-4 bg-amber-50 border-b border-amber-200">
+                                        <h3 className="text-lg font-bold text-amber-800 flex items-center gap-2">
+                                            ⚠️ Xác nhận chuẩn hóa dữ liệu
+                                        </h3>
+                                    </div>
+                                    <div className="px-6 py-4 space-y-3 max-h-80 overflow-y-auto">
+                                        <p className="text-sm text-gray-600">Bạn sắp thay thế dữ liệu cho:</p>
+                                        {normalizeData
+                                            .filter((c) => normalizeChecked.has(`${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`))
+                                            .map((c, i) => (
+                                                <div key={i} className="px-4 py-2.5 bg-gray-50 rounded-lg border border-gray-200 text-sm">
+                                                    <p className="font-bold text-gray-800">{c.ma_cskcb} — {c.ten_cskcb}, kỳ {c.thang_qt}/{c.nam_qt}</p>
+                                                    <p className="text-gray-600">→ Xóa <span className="text-red-500 font-bold">{c.bqCount.toLocaleString()}</span> bản ghi cũ, thêm <span className="text-emerald-600 font-bold">{c.excelCount.toLocaleString()}</span> bản ghi mới</p>
+                                                </div>
+                                            ))}
+                                        <div className="pt-2 border-t border-gray-200">
+                                            <p className="font-bold text-gray-800 text-sm">
+                                                Tổng: Xóa {normalizeData.filter((c) => normalizeChecked.has(`${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`)).reduce((s, c) => s + c.bqCount, 0).toLocaleString()} → Thêm {normalizeData.filter((c) => normalizeChecked.has(`${c.ma_cskcb}|${c.thang_qt}|${c.nam_qt}`)).reduce((s, c) => s + c.excelCount, 0).toLocaleString()} bản ghi
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+                                        <button
+                                            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                            onClick={() => setShowNormalizeConfirm(false)}
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            className="px-5 py-2 text-sm font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors shadow-sm cursor-pointer"
+                                            onClick={handleNormalizeExecute}
+                                        >
+                                            Xác nhận chuẩn hóa
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>

@@ -31,10 +31,15 @@ export async function POST(request: Request) {
         }
 
         const client = getBqClient();
-        const dupIndices = await getDuplicateIndices(client, keys);
+        const { dupIndices, normalizedMap } = await getDuplicateIndices(client, keys);
+
+        // Convert normalizedMap to a plain object for JSON serialization
+        const normalizedStatus: Record<number, boolean> = {};
+        normalizedMap.forEach((v, k) => { normalizedStatus[k] = v; });
 
         return NextResponse.json({
             duplicateIndices: Array.from(dupIndices),
+            normalizedStatus,
         });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
@@ -120,12 +125,13 @@ function bqScalar(val: unknown): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number>> {
+async function getDuplicateIndices(client: any, rows: Row[]): Promise<{ dupIndices: Set<number>; normalizedMap: Map<number, boolean> }> {
     const dupIndices = new Set<number>();
+    const normalizedMap = new Map<number, boolean>();
     const maBnList = [
         ...new Set(rows.map((r) => r.ma_bn).filter(Boolean).map(String)),
     ];
-    if (maBnList.length === 0) return dupIndices;
+    if (maBnList.length === 0) return { dupIndices, normalizedMap };
 
     const keyCols = ROW_KEY_COLS.join(", ");
     const BATCH_SIZE = 5000;
@@ -133,28 +139,32 @@ async function getDuplicateIndices(client: any, rows: Row[]): Promise<Set<number
     for (let i = 0; i < maBnList.length; i += BATCH_SIZE) {
         const batch = maBnList.slice(i, i + BATCH_SIZE);
         const inList = batch.map((m) => `'${m.replace(/'/g, "\\'")}'`).join(", ");
-        const query = `SELECT ${keyCols} FROM \`${FULL_TABLE_ID}\` WHERE ma_bn IN (${inList})`;
+        const query = `SELECT ${keyCols}, IFNULL(is_normalized, FALSE) as is_normalized FROM \`${FULL_TABLE_ID}\` WHERE ma_bn IN (${inList})`;
 
         try {
             const [job] = await client.createQueryJob({ query });
             const [bqRows] = await job.getQueryResults();
             if (bqRows.length === 0) continue;
 
-            const bqKeys = new Set(
-                bqRows.map((bqRow: Row) =>
-                    ROW_KEY_COLS.map((c) => bqScalar(bqRow[c])).join("|")
-                )
-            );
+            const bqKeyMap = new Map<string, boolean>();
+            bqRows.forEach((bqRow: Row) => {
+                const key = ROW_KEY_COLS.map((c) => bqScalar(bqRow[c])).join("|");
+                const isNorm = bqRow.is_normalized === true || bqRow.is_normalized === "true";
+                bqKeyMap.set(key, isNorm);
+            });
 
             rows.forEach((row, idx) => {
                 const rowKey = ROW_KEY_COLS.map((c) => bqScalar(row[c])).join("|");
-                if (bqKeys.has(rowKey)) dupIndices.add(idx);
+                if (bqKeyMap.has(rowKey)) {
+                    dupIndices.add(idx);
+                    normalizedMap.set(idx, bqKeyMap.get(rowKey)!);
+                }
             });
         } catch {
             // Skip batch errors
         }
     }
-    return dupIndices;
+    return { dupIndices, normalizedMap };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

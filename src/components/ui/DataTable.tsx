@@ -174,7 +174,7 @@ export default function DataTable({
                                         return (
                                             <td
                                                 key={col.key}
-                                                className="border border-gray-100 px-2.5 py-1.5 text-gray-700"
+                                                className={`border border-gray-100 px-2.5 py-1.5 ${extraClass && extraClass.includes("text-") ? "text-inherit" : "text-gray-700"}`}
                                                 style={{
                                                     textAlign:
                                                         col.align || "left",
