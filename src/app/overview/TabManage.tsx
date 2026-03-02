@@ -61,8 +61,11 @@ export default function TabManage() {
                 setYears(yrs);
                 setColumns(cols);
                 if (yrs.length > 0 && fromYear === 0) {
-                    setFromYear(yrs[yrs.length - 1]); // oldest
-                    setToYear(yrs[0]); // newest
+                    const currentYear = new Date().getFullYear();
+                    // Default both to current year (or nearest available)
+                    const bestYear = yrs.includes(currentYear) ? currentYear : yrs[0];
+                    setFromYear(bestYear);
+                    setToYear(bestYear);
                 }
                 if (cols.length > 0 && !conditions[0].field) {
                     setConditions([{ field: cols[0], keyword: "", operator: "AND" }]);
@@ -139,14 +142,6 @@ export default function TabManage() {
         }
     }, [fromYear, toYear, getActualMethod]);
 
-    /* ── Auto-reload data if it was loaded before ── */
-    const hasAutoReloaded = useRef(false);
-    useEffect(() => {
-        if (dataLoaded && !data && fromYear > 0 && !hasAutoReloaded.current) {
-            hasAutoReloaded.current = true;
-            handleLoad();
-        }
-    }, [dataLoaded, data, fromYear, handleLoad]);
 
     /* ── Search ── */
     const handleSearch = async () => {

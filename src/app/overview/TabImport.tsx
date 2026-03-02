@@ -56,6 +56,12 @@ interface NormalizeResult {
     inserted: number;
 }
 
+interface ProgressState {
+    current: number;
+    total: number;
+    step?: string;
+}
+
 /* ── Column config ── */
 
 /** Human-readable labels for BQ columns */
@@ -183,6 +189,10 @@ export default function TabImport() {
     const [showNormalizeConfirm, setShowNormalizeConfirm] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const normalizeCompared = useRef(false);
+
+    // Progress tracking
+    const [uploadProgress, setUploadProgress] = useState<ProgressState | null>(null);
+    const [normalizeProgress, setNormalizeProgress] = useState<ProgressState | null>(null);
 
     // Lookup tables for pivot summary
     const [loaiKCBMap, setLoaiKCBMap] = useState<Map<number, string>>(new Map());
@@ -518,6 +528,7 @@ export default function TabImport() {
             const CHUNK_SIZE = 1500;
             let totalUploaded = 0;
             let totalDeleted = 0;
+            setUploadProgress({ current: 0, total: rowsToSend.length });
 
             for (let i = 0; i < rowsToSend.length; i += CHUNK_SIZE) {
                 const chunk = rowsToSend.slice(i, i + CHUNK_SIZE);
@@ -530,6 +541,7 @@ export default function TabImport() {
                 if (d.error) throw new Error(d.error);
                 totalUploaded += d.uploaded || 0;
                 totalDeleted += d.deleted || 0;
+                setUploadProgress({ current: totalUploaded, total: rowsToSend.length });
             }
 
             // Mark uploaded rows as done
@@ -909,6 +921,8 @@ export default function TabImport() {
             }
 
             // Send in chunks per group (each group sent as a single request)
+            const totalRows = groups.reduce((s, g) => s + g.rows.length, 0);
+            let processedRows = 0;
             const allResults: NormalizeResult[] = [];
             for (const group of groups) {
                 const CHUNK_SIZE = 1500;
@@ -921,6 +935,9 @@ export default function TabImport() {
                 let totalInserted = 0;
                 let totalDeleted = 0;
                 for (let ci = 0; ci < chunks.length; ci++) {
+                    if (ci === 0) {
+                        setNormalizeProgress({ current: processedRows, total: totalRows, step: "Đang xóa hồ sơ cũ..." });
+                    }
                     const payload = ci === 0
                         ? { action: "execute", groups: [{ ...group, rows: chunks[ci] }] }
                         : { action: "execute", groups: [{ ...group, rows: chunks[ci], skipDelete: true }] };
@@ -935,6 +952,8 @@ export default function TabImport() {
                         totalInserted += data.results[0].inserted || 0;
                         totalDeleted += data.results[0].deleted || 0;
                     }
+                    processedRows += chunks[ci].length;
+                    setNormalizeProgress({ current: processedRows, total: totalRows, step: "Đang thêm hồ sơ mới..." });
                 }
                 allResults.push({
                     ma_cskcb: group.ma_cskcb,
@@ -952,6 +971,7 @@ export default function TabImport() {
             setNormalizeError(e instanceof Error ? e.message : "Unknown error");
         } finally {
             setNormalizeLoading(false);
+            setNormalizeProgress(null);
         }
     };
 
@@ -1498,7 +1518,7 @@ export default function TabImport() {
                                             disabled={loading || checkedDupCount === 0}
                                         >
                                             {loading ? (
-                                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang ghi đè...</>
+                                                <><Loader2 className="w-4 h-4 animate-spin" /> {uploadProgress ? `Đang ghi đè ${uploadProgress.current.toLocaleString()}/${uploadProgress.total.toLocaleString()} (${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)` : "Đang ghi đè..."}</>
                                             ) : (
                                                 `🔄 Xác nhận ghi đè (${checkedDupCount})`
                                             )}
@@ -1512,13 +1532,27 @@ export default function TabImport() {
                                             disabled={loading || checkedNewCount === 0}
                                         >
                                             {loading ? (
-                                                <><Loader2 className="w-4 h-4 animate-spin" /> Đang tải lên...</>
+                                                <><Loader2 className="w-4 h-4 animate-spin" /> {uploadProgress ? `Đang tải lên ${uploadProgress.current.toLocaleString()}/${uploadProgress.total.toLocaleString()} (${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)` : "Đang tải lên..."}</>
                                             ) : (
                                                 `☁️ Tải lên mới (${checkedNewCount})`
                                             )}
                                         </button>
                                     )}
                                 </div>
+                                {/* Progress bar */}
+                                {uploadProgress && (
+                                    <div className="px-5 pb-3 bg-gray-50 flex flex-col items-center gap-1.5">
+                                        <div className="w-full max-w-md bg-gray-200 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-primary-500 h-full rounded-full transition-all duration-500 ease-out"
+                                                style={{ width: `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-xs text-gray-500">
+                                            {uploadProgress.current.toLocaleString()}/{uploadProgress.total.toLocaleString()} hồ sơ
+                                        </span>
+                                    </div>
+                                )}
                             </>
                         )}
 
@@ -1726,12 +1760,26 @@ export default function TabImport() {
                                                 disabled={normalizeLoading || normalizeChecked.size === 0}
                                             >
                                                 {normalizeLoading ? (
-                                                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý...</>
+                                                    <><Loader2 className="w-4 h-4 animate-spin" /> {normalizeProgress ? `${normalizeProgress.step || "Đang xử lý..."} ${normalizeProgress.current.toLocaleString()}/${normalizeProgress.total.toLocaleString()} (${Math.round((normalizeProgress.current / normalizeProgress.total) * 100)}%)` : "Đang xử lý..."}</>
                                                 ) : (
                                                     `🔄 Chuẩn hóa (${normalizeChecked.size} kỳ)`
                                                 )}
                                             </button>
                                         </div>
+                                        {/* Normalize progress bar */}
+                                        {normalizeProgress && (
+                                            <div className="mt-3 flex flex-col items-center gap-1.5 w-full max-w-md mx-auto">
+                                                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                                    <div
+                                                        className="bg-teal-500 h-full rounded-full transition-all duration-500 ease-out"
+                                                        style={{ width: `${Math.round((normalizeProgress.current / normalizeProgress.total) * 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-gray-500">
+                                                    {normalizeProgress.current.toLocaleString()}/{normalizeProgress.total.toLocaleString()} hồ sơ
+                                                </span>
+                                            </div>
+                                        )}
                                     </>
                                 )}
 
