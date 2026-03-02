@@ -10,6 +10,7 @@ export interface SearchCondition {
 
 interface SearchBuilderProps {
     columns: string[];
+    columnLabels?: Record<string, string>;
     conditions: SearchCondition[];
     onConditionsChange: (conditions: SearchCondition[]) => void;
     onSearch: () => void;
@@ -19,6 +20,7 @@ interface SearchBuilderProps {
 
 export default function SearchBuilder({
     columns,
+    columnLabels,
     conditions,
     onConditionsChange,
     onSearch,
@@ -102,7 +104,7 @@ export default function SearchBuilder({
                         >
                             {columns.map((col) => (
                                 <option key={col} value={col}>
-                                    {col}
+                                    {columnLabels?.[col] || col}
                                 </option>
                             ))}
                         </select>

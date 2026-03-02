@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { Loader2, Trash2 } from "lucide-react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -279,6 +280,44 @@ export default function TabManage() {
         }
     };
 
+    /* ── Column display config ── */
+    const COL_LABELS: Record<string, string> = {
+        stt: "STT", ma_bn: "Mã BN", ho_ten: "Họ tên", ngay_sinh: "Ngày sinh",
+        gioi_tinh: "Giới tính", dia_chi: "Địa chỉ", ma_the: "Mã thẻ",
+        ma_dkbd: "Mã ĐKBD", gt_the_tu: "GT thẻ từ", gt_the_den: "GT thẻ đến",
+        ma_benh: "Mã bệnh", ma_benhkhac: "Mã bệnh khác",
+        ma_lydo_vvien: "Lý do VV", ma_noi_chuyen: "Nơi chuyển",
+        ngay_vao: "Ngày vào", ngay_ra: "Ngày ra", so_ngay_dtri: "Số ngày ĐT",
+        ket_qua_dtri: "Kết quả ĐT", tinh_trang_rv: "Tình trạng RV",
+        t_tongchi: "Tổng chi", t_xn: "Xét nghiệm", t_cdha: "CĐHA",
+        t_thuoc: "Thuốc", t_mau: "Máu", t_pttt: "PTTT", t_vtyt: "VTYT",
+        t_dvkt_tyle: "DVKT tỷ lệ", t_thuoc_tyle: "Thuốc tỷ lệ",
+        t_vtyt_tyle: "VTYT tỷ lệ", t_kham: "Khám", t_giuong: "Giường",
+        t_vchuyen: "Vận chuyển", t_bntt: "BN thanh toán", t_bhtt: "BH thanh toán",
+        t_ngoaids: "Ngoài DS", ma_khoa: "Mã khoa", nam_qt: "Năm QT",
+        thang_qt: "Tháng QT", ma_khuvuc: "Mã khu vực", ma_loaikcb: "Loại KCB",
+        ma_cskcb: "Mã CSKCB", noi_ttoan: "Nơi thanh toán", giam_dinh: "Giám định",
+        t_xuattoan: "Xuất toán", t_nguonkhac: "Nguồn khác",
+        t_datuyen: "Đa tuyến", t_vuottran: "Vượt trần",
+        is_normalized: "Chuẩn hóa", normalized_at: "Ngày chuẩn hóa",
+        ten_cskcb: "Tên CSKCB", khoa: "Khoa", ml2: "Nội/Ngoại trú", ml4: "Loại KCB",
+        ma_benh_chinh: "Mã bệnh chính", upload_timestamp: "Ngày tải lên",
+    };
+
+    const RIGHT_ALIGN_COLS = new Set([
+        "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
+        "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
+        "t_vchuyen", "t_bntt", "t_bhtt", "t_ngoaids", "t_xuattoan", "t_nguonkhac",
+        "t_datuyen", "t_vuottran", "so_ngay_dtri",
+    ]);
+
+    const CENTER_ALIGN_COLS = new Set([
+        "stt", "ngay_sinh", "gioi_tinh", "ngay_vao", "ngay_ra", "ma_cskcb",
+        "ma_dkbd", "ma_khoa", "ma_loaikcb", "ma_khuvuc", "nam_qt", "thang_qt",
+        "ket_qua_dtri", "tinh_trang_rv", "ma_lydo_vvien", "noi_ttoan",
+        "giam_dinh", "is_normalized",
+    ]);
+
     /* ── Build table columns ── */
     // Derive columns from actual display data when available
     const effectiveCols = displayData.length > 0
@@ -289,9 +328,25 @@ export default function TabManage() {
 
     const tableColumns: Column[] = effectiveCols.map((col) => ({
         key: col,
-        label: col,
-        align: col.startsWith("t_") || col === "so_ngay_dtri" ? "right" as const : "left" as const,
+        label: COL_LABELS[col] || col,
+        align: (RIGHT_ALIGN_COLS.has(col) ? "right" : CENTER_ALIGN_COLS.has(col) ? "center" : "left") as "left" | "center" | "right",
+        ...(col === "is_normalized" ? {
+            width: 80,
+            render: (val: unknown) => {
+                const v = val === true || val === "true" || val === 1 || val === "1";
+                return v ? React.createElement("span", { className: "text-green-600 font-bold" }, "x") : "";
+            },
+        } : {}),
     }));
+
+    /* ── Row styling: blue text for normalized rows ── */
+    const getRowClassName = (displayIdx: number): string => {
+        const row = displayData[displayIdx];
+        if (!row) return "";
+        const v = row.is_normalized;
+        if (v === true || v === "true" || v === 1 || v === "1") return "text-blue-600";
+        return "";
+    };
 
     /* ── Export Excel ── */
     const handleExportExcel = useCallback(() => {
@@ -486,6 +541,7 @@ export default function TabManage() {
 
                     <SearchBuilder
                         columns={columns}
+                        columnLabels={COL_LABELS}
                         conditions={conditions}
                         onConditionsChange={setConditions}
                         onSearch={handleSearch}
@@ -510,11 +566,18 @@ export default function TabManage() {
                         }
                     />
 
-                    {isSearching && (
-                        <InfoBanner type="success" style={{ marginTop: "0.75rem" }}>
-                            Tìm thấy <strong>{displayData.length.toLocaleString()}</strong> / {totalRows.toLocaleString()} dòng
-                        </InfoBanner>
-                    )}
+                    {isSearching && (() => {
+                        const noiTru = displayData.filter((r) => r.ml2 === "Nội trú").length;
+                        const ngoaiTru = displayData.filter((r) => r.ml2 === "Ngoại trú").length;
+                        return (
+                            <InfoBanner type="success" style={{ marginTop: "0.75rem" }}>
+                                Tìm thấy <strong>{displayData.length.toLocaleString()}</strong> / {totalRows.toLocaleString()} hồ sơ
+                                {(noiTru > 0 || ngoaiTru > 0) && (
+                                    <> (trong đó Nội trú: <strong>{noiTru.toLocaleString()}</strong>, Ngoại trú: <strong>{ngoaiTru.toLocaleString()}</strong>)</>
+                                )}
+                            </InfoBanner>
+                        );
+                    })()}
 
                     {/* Data table */}
                     <div style={{ marginTop: "0.75rem" }}>
@@ -525,6 +588,7 @@ export default function TabManage() {
                             selectedRows={selectedRows}
                             onSelectionChange={setSelectedRows}
                             stickyHeader
+                            rowClassName={getRowClassName}
                         />
                     </div>
 
