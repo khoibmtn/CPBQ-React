@@ -1,16 +1,19 @@
 import { type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface PageHeaderProps {
     title: string;
     subtitle?: string;
     icon?: LucideIcon | string;
     gradient?: string; // ignored, kept for backward compat
+    extra?: ReactNode;
 }
 
 export default function PageHeader({
     title,
     subtitle,
     icon,
+    extra,
 }: PageHeaderProps) {
     const renderIcon = () => {
         if (!icon) return null;
@@ -26,6 +29,7 @@ export default function PageHeader({
                 <h1 className="font-heading text-2xl font-bold text-gray-900">
                     {title}
                 </h1>
+                {extra && <div className="ml-auto">{extra}</div>}
             </div>
             {subtitle && (
                 <p className="text-sm text-gray-500 ml-10">{subtitle}</p>

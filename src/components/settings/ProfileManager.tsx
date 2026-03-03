@@ -51,7 +51,7 @@ function buildDefaultItems(): MetricItem[] {
     }));
 }
 
-export default function ProfileManager() {
+export default function ProfileManager({ readOnly }: { readOnly?: boolean }) {
     const [profileNames, setProfileNames] = useState<string[]>([]);
     const [selected, setSelected] = useState<string | null>(null);
     const [items, setItems] = useState<MetricItem[]>([]);
@@ -291,9 +291,10 @@ export default function ProfileManager() {
             <div className="p-6 flex items-center gap-4 border-b border-slate-100">
                 <div className="w-[60%]">
                     <select
-                        className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-sm font-medium focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                        className={`w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-lg text-slate-700 text-sm font-medium focus:ring-indigo-500 focus:border-indigo-500 ${readOnly ? 'bg-slate-100 cursor-default' : 'bg-slate-50 cursor-pointer'}`}
                         value={selected || ""}
                         onChange={(e) => handleSelectProfile(e.target.value)}
+                        disabled={readOnly}
                     >
                         {profileNames.length === 0 && <option value="">Chưa có profile</option>}
                         {profileNames.map((n) => (
@@ -301,21 +302,23 @@ export default function ProfileManager() {
                         ))}
                     </select>
                 </div>
-                <div className="flex flex-1 items-center justify-end gap-3">
-                    <button
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all cursor-pointer"
-                        onClick={() => setShowCreateDialog(true)}
-                    >
-                        <Plus className="w-[18px] h-[18px]" /> Tạo mới
-                    </button>
-                    <button
-                        className="flex items-center gap-2 border border-red-200 text-red-600 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-red-50 transition-all cursor-pointer disabled:opacity-50"
-                        onClick={() => selected && setConfirmDelete(selected)}
-                        disabled={!selected}
-                    >
-                        <Trash2 className="w-[18px] h-[18px]" /> Xóa
-                    </button>
-                </div>
+                {!readOnly && (
+                    <div className="flex flex-1 items-center justify-end gap-3">
+                        <button
+                            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all cursor-pointer"
+                            onClick={() => setShowCreateDialog(true)}
+                        >
+                            <Plus className="w-[18px] h-[18px]" /> Tạo mới
+                        </button>
+                        <button
+                            className="flex items-center gap-2 border border-red-200 text-red-600 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-red-50 transition-all cursor-pointer disabled:opacity-50"
+                            onClick={() => selected && setConfirmDelete(selected)}
+                            disabled={!selected}
+                        >
+                            <Trash2 className="w-[18px] h-[18px]" /> Xóa
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Create dialog */}
@@ -379,15 +382,17 @@ export default function ProfileManager() {
                                 Đã chọn <strong className="text-slate-800">{visibleCount}</strong> / {items.length} chỉ tiêu
                             </p>
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer select-none group">
-                            <span className="text-xs font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">CHỌN TẤT CẢ</span>
-                            <input
-                                type="checkbox"
-                                checked={allChecked}
-                                onChange={toggleAll}
-                                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                            />
-                        </label>
+                        {!readOnly && (
+                            <label className="flex items-center gap-2 cursor-pointer select-none group">
+                                <span className="text-xs font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">CHỌN TẤT CẢ</span>
+                                <input
+                                    type="checkbox"
+                                    checked={allChecked}
+                                    onChange={toggleAll}
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </label>
+                        )}
                     </div>
 
                     {/* Scrollable metric list */}
@@ -413,25 +418,28 @@ export default function ProfileManager() {
                                                     type="checkbox"
                                                     checked
                                                     onChange={() => toggleItem(item.metric_key)}
-                                                    className="w-5 h-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer mr-4"
+                                                    disabled={readOnly}
+                                                    className={`w-5 h-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 mr-4 ${readOnly ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                                 />
                                                 <span className="text-sm font-bold text-indigo-900 flex-1">{name}</span>
-                                                <div className="flex gap-1 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
-                                                        onClick={() => moveUp(item.metric_key)}
-                                                        disabled={idx === 0}
-                                                    >
-                                                        <ArrowUp className="w-[18px] h-[18px]" />
-                                                    </button>
-                                                    <button
-                                                        className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
-                                                        onClick={() => moveDown(item.metric_key)}
-                                                        disabled={idx >= checked.length - 1}
-                                                    >
-                                                        <ArrowDown className="w-[18px] h-[18px]" />
-                                                    </button>
-                                                </div>
+                                                {!readOnly && (
+                                                    <div className="flex gap-1 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
+                                                            onClick={() => moveUp(item.metric_key)}
+                                                            disabled={idx === 0}
+                                                        >
+                                                            <ArrowUp className="w-[18px] h-[18px]" />
+                                                        </button>
+                                                        <button
+                                                            className="p-1 hover:text-indigo-600 hover:bg-white rounded transition-all cursor-pointer disabled:opacity-30"
+                                                            onClick={() => moveDown(item.metric_key)}
+                                                            disabled={idx >= checked.length - 1}
+                                                        >
+                                                            <ArrowDown className="w-[18px] h-[18px]" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -459,7 +467,8 @@ export default function ProfileManager() {
                                                     type="checkbox"
                                                     checked={false}
                                                     onChange={() => toggleItem(item.metric_key)}
-                                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer mr-4"
+                                                    disabled={readOnly}
+                                                    className={`w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mr-4 ${readOnly ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                                 />
                                                 <span className="text-sm font-medium text-slate-400 flex-1">{name}</span>
                                             </div>
@@ -471,25 +480,27 @@ export default function ProfileManager() {
                     </div>
 
                     {/* Footer: Save/Cancel */}
-                    <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-end gap-3 mt-auto">
-                        <button
-                            className="px-6 py-2.5 rounded-lg text-sm font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-50 transition-all cursor-pointer"
-                            onClick={() => selected && loadProfile(selected)}
-                        >
-                            Hủy bỏ
-                        </button>
-                        <button
-                            className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 cursor-pointer"
-                            onClick={handleSave}
-                            disabled={saving}
-                        >
-                            {saving ? (
-                                <><Loader2 className="w-5 h-5 animate-spin" /> Đang lưu...</>
-                            ) : (
-                                <><Save className="w-5 h-5" /> Lưu profile</>
-                            )}
-                        </button>
-                    </div>
+                    {!readOnly && (
+                        <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-end gap-3 mt-auto">
+                            <button
+                                className="px-6 py-2.5 rounded-lg text-sm font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-50 transition-all cursor-pointer"
+                                onClick={() => selected && loadProfile(selected)}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 cursor-pointer"
+                                onClick={handleSave}
+                                disabled={saving}
+                            >
+                                {saving ? (
+                                    <><Loader2 className="w-5 h-5 animate-spin" /> Đang lưu...</>
+                                ) : (
+                                    <><Save className="w-5 h-5" /> Lưu profile</>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </>
             )}
         </div>

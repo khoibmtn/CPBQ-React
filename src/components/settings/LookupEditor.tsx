@@ -14,9 +14,10 @@ interface Column {
 interface LookupEditorProps {
     tableName: string;
     columns: Column[];
+    readOnly?: boolean;
 }
 
-export default function LookupEditor({ tableName, columns }: LookupEditorProps) {
+export default function LookupEditor({ tableName, columns, readOnly }: LookupEditorProps) {
     const [rows, setRows] = useState<Record<string, unknown>[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -188,15 +189,19 @@ export default function LookupEditor({ tableName, columns }: LookupEditorProps) 
                     <code>{tableName}</code> · {rows.length} dòng
                 </span>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 cursor-pointer" onClick={saveData} disabled={saving}>
-                        {saving ? "⏳ Đang lưu..." : "💾 Lưu"}
-                    </button>
+                    {!readOnly && (
+                        <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 cursor-pointer" onClick={saveData} disabled={saving}>
+                            {saving ? "⏳ Đang lưu..." : "💾 Lưu"}
+                        </button>
+                    )}
                     <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer" onClick={loadData}>
                         🔄 Tải lại
                     </button>
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer" onClick={addRow} disabled={editingIdx >= 0}>
-                        ➕ Thêm dòng
-                    </button>
+                    {!readOnly && (
+                        <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer" onClick={addRow} disabled={editingIdx >= 0}>
+                            ➕ Thêm dòng
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -210,7 +215,7 @@ export default function LookupEditor({ tableName, columns }: LookupEditorProps) 
                         {columns.map((col) => (
                             <col key={col.key} style={col.width ? { width: col.width } : undefined} />
                         ))}
-                        <col style={{ width: "90px" }} />
+                        {!readOnly && <col style={{ width: "90px" }} />}
                     </colgroup>
                     <thead>
                         <tr>
@@ -218,7 +223,7 @@ export default function LookupEditor({ tableName, columns }: LookupEditorProps) 
                             {columns.map((col) => (
                                 <th key={col.key} style={thStyle} title={col.help}>{col.label}</th>
                             ))}
-                            <th style={{ ...thStyle, textAlign: "center", width: "90px" }}>Hành động</th>
+                            {!readOnly && <th style={{ ...thStyle, textAlign: "center", width: "90px" }}>Hành động</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -253,45 +258,47 @@ export default function LookupEditor({ tableName, columns }: LookupEditorProps) 
                                         </td>
                                     ))}
 
-                                    <td style={{ ...cellStyle, textAlign: "center" }}>
-                                        {isEditing ? (
-                                            <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
-                                                <button
-                                                    onClick={confirmEdit}
-                                                    title="Xác nhận"
-                                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                                                >
-                                                    <Check className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={cancelEdit}
-                                                    title="Hủy"
-                                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:bg-gray-100 transition-colors cursor-pointer"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
-                                                <button
-                                                    onClick={() => startEdit(ri)}
-                                                    title="Sửa"
-                                                    disabled={editingIdx >= 0}
-                                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteRow(ri)}
-                                                    title="Xóa"
-                                                    disabled={editingIdx >= 0}
-                                                    className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </td>
+                                    {!readOnly && (
+                                        <td style={{ ...cellStyle, textAlign: "center" }}>
+                                            {isEditing ? (
+                                                <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
+                                                    <button
+                                                        onClick={confirmEdit}
+                                                        title="Xác nhận"
+                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                                    >
+                                                        <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEdit}
+                                                        title="Hủy"
+                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:bg-gray-100 transition-colors cursor-pointer"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: "flex", gap: "2px", justifyContent: "center" }}>
+                                                    <button
+                                                        onClick={() => startEdit(ri)}
+                                                        title="Sửa"
+                                                        disabled={editingIdx >= 0}
+                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deleteRow(ri)}
+                                                        title="Xóa"
+                                                        disabled={editingIdx >= 0}
+                                                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    )}
                                 </tr>
                             );
                         })}

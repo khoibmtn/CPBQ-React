@@ -17,7 +17,7 @@ interface MergeGroup {
     sources: string[]; // display strings in component state
 }
 
-export default function MergeManager() {
+export default function MergeManager({ readOnly }: { readOnly?: boolean }) {
     const [groups, setGroups] = useState<MergeGroup[]>([]);
     const [khoaOptions, setKhoaOptions] = useState<KhoaOption[]>([]);
     const [loading, setLoading] = useState(true);
@@ -241,40 +241,44 @@ export default function MergeManager() {
                                         const opt = displayToOption[e.target.value];
                                         if (opt) setTarget(gi, opt.short_name);
                                     }}
+                                    disabled={readOnly}
                                     style={{
                                         flex: 1, padding: "8px 12px",
                                         fontSize: "0.85rem", borderRadius: "8px",
                                         border: "1px solid #d1d5db",
-                                        backgroundColor: "#fff",
+                                        backgroundColor: readOnly ? "#f8fafc" : "#fff",
                                         color: "#1e293b",
                                         outline: "none",
+                                        cursor: readOnly ? "default" : undefined,
                                     }}
                                 >
                                     {allDisplays.map((d) => (
                                         <option key={d} value={d}>{d}</option>
                                     ))}
                                 </select>
-                                <button
-                                    onClick={() => deleteGroup(gi)}
-                                    style={{
-                                        display: "inline-flex", alignItems: "center", gap: "6px",
-                                        padding: "7px 14px", fontSize: "0.78rem", fontWeight: 500,
-                                        borderRadius: "8px", border: "1px solid #fecaca",
-                                        backgroundColor: "#fff", color: "#ef4444",
-                                        cursor: "pointer", whiteSpace: "nowrap",
-                                        transition: "all 0.15s",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#fef2f2";
-                                        e.currentTarget.style.borderColor = "#f87171";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#fff";
-                                        e.currentTarget.style.borderColor = "#fecaca";
-                                    }}
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" /> Xóa nhóm
-                                </button>
+                                {!readOnly && (
+                                    <button
+                                        onClick={() => deleteGroup(gi)}
+                                        style={{
+                                            display: "inline-flex", alignItems: "center", gap: "6px",
+                                            padding: "7px 14px", fontSize: "0.78rem", fontWeight: 500,
+                                            borderRadius: "8px", border: "1px solid #fecaca",
+                                            backgroundColor: "#fff", color: "#ef4444",
+                                            cursor: "pointer", whiteSpace: "nowrap",
+                                            transition: "all 0.15s",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = "#fef2f2";
+                                            e.currentTarget.style.borderColor = "#f87171";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = "#fff";
+                                            e.currentTarget.style.borderColor = "#fecaca";
+                                        }}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" /> Xóa nhóm
+                                    </button>
+                                )}
                             </div>
 
                             {/* Divider */}
@@ -303,50 +307,54 @@ export default function MergeManager() {
                                             color: "#334155",
                                         }}>
                                             <span>{srcDisplay}</span>
-                                            <button
-                                                onClick={() => removeSource(gi, srcDisplay)}
-                                                title="Xóa khoa nguồn"
-                                                style={{
-                                                    background: "none", border: "none", cursor: "pointer",
-                                                    color: "#94a3b8", padding: "2px",
-                                                    display: "inline-flex", alignItems: "center",
-                                                    borderRadius: "4px", transition: "all 0.15s",
-                                                }}
-                                                onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.backgroundColor = "#fef2f2"; }}
-                                                onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.backgroundColor = "transparent"; }}
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            {!readOnly && (
+                                                <button
+                                                    onClick={() => removeSource(gi, srcDisplay)}
+                                                    title="Xóa khoa nguồn"
+                                                    style={{
+                                                        background: "none", border: "none", cursor: "pointer",
+                                                        color: "#94a3b8", padding: "2px",
+                                                        display: "inline-flex", alignItems: "center",
+                                                        borderRadius: "4px", transition: "all 0.15s",
+                                                    }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.backgroundColor = "#fef2f2"; }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
 
                                 {/* Add source dropdown — dashed border */}
-                                <select
-                                    value=""
-                                    onChange={(e) => {
-                                        if (e.target.value) addSource(gi, e.target.value);
-                                    }}
-                                    disabled={sortedEligible.length === 0}
-                                    style={{
-                                        marginTop: "10px", padding: "8px 12px",
-                                        fontSize: "0.82rem", borderRadius: "8px",
-                                        border: "2px dashed #cbd5e1",
-                                        backgroundColor: sortedEligible.length === 0 ? "#f8fafc" : "#fff",
-                                        color: sortedEligible.length === 0 ? "#94a3b8" : "#64748b",
-                                        cursor: sortedEligible.length === 0 ? "not-allowed" : "pointer",
-                                        outline: "none", width: "100%",
-                                    }}
-                                >
-                                    <option value="">
-                                        {sortedEligible.length === 0
-                                            ? "-- Không còn khoa phù hợp --"
-                                            : "-- Chọn khoa để thêm --"}
-                                    </option>
-                                    {sortedEligible.map((o) => (
-                                        <option key={o.display} value={o.display}>{o.display}</option>
-                                    ))}
-                                </select>
+                                {!readOnly && (
+                                    <select
+                                        value=""
+                                        onChange={(e) => {
+                                            if (e.target.value) addSource(gi, e.target.value);
+                                        }}
+                                        disabled={sortedEligible.length === 0}
+                                        style={{
+                                            marginTop: "10px", padding: "8px 12px",
+                                            fontSize: "0.82rem", borderRadius: "8px",
+                                            border: "2px dashed #cbd5e1",
+                                            backgroundColor: sortedEligible.length === 0 ? "#f8fafc" : "#fff",
+                                            color: sortedEligible.length === 0 ? "#94a3b8" : "#64748b",
+                                            cursor: sortedEligible.length === 0 ? "not-allowed" : "pointer",
+                                            outline: "none", width: "100%",
+                                        }}
+                                    >
+                                        <option value="">
+                                            {sortedEligible.length === 0
+                                                ? "-- Không còn khoa phù hợp --"
+                                                : "-- Chọn khoa để thêm --"}
+                                        </option>
+                                        {sortedEligible.map((o) => (
+                                            <option key={o.display} value={o.display}>{o.display}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                         </div>
                     );
@@ -354,49 +362,53 @@ export default function MergeManager() {
             </div>
 
             {/* Add new group button */}
-            <button
-                onClick={addGroup}
-                style={{
-                    display: "inline-flex", alignItems: "center", gap: "8px",
-                    padding: "10px 20px", marginTop: "16px",
-                    fontSize: "0.85rem", fontWeight: 500,
-                    borderRadius: "10px", border: "1px solid #d1d5db",
-                    backgroundColor: "#fff", color: "#475569",
-                    cursor: "pointer", transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; e.currentTarget.style.borderColor = "#94a3b8"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#fff"; e.currentTarget.style.borderColor = "#d1d5db"; }}
-            >
-                <Plus className="w-4 h-4" /> Thêm nhóm gộp mới
-            </button>
-
-            {/* Save button — separated */}
-            <div style={{
-                borderTop: "1px solid #e2e8f0",
-                marginTop: "20px", paddingTop: "16px",
-                display: "flex", justifyContent: "flex-end",
-            }}>
+            {!readOnly && (
                 <button
-                    onClick={handleSave}
-                    disabled={saving}
+                    onClick={addGroup}
                     style={{
                         display: "inline-flex", alignItems: "center", gap: "8px",
-                        padding: "10px 24px",
-                        fontSize: "0.85rem", fontWeight: 600,
-                        borderRadius: "10px", border: "none",
-                        backgroundColor: saving ? "#94a3b8" : "#4f46e5",
-                        color: "#fff",
-                        cursor: saving ? "not-allowed" : "pointer",
-                        transition: "all 0.15s",
-                        boxShadow: "0 1px 3px rgba(79,70,229,0.3)",
+                        padding: "10px 20px", marginTop: "16px",
+                        fontSize: "0.85rem", fontWeight: 500,
+                        borderRadius: "10px", border: "1px solid #d1d5db",
+                        backgroundColor: "#fff", color: "#475569",
+                        cursor: "pointer", transition: "all 0.15s",
                     }}
-                    onMouseEnter={(e) => { if (!saving) e.currentTarget.style.backgroundColor = "#4338ca"; }}
-                    onMouseLeave={(e) => { if (!saving) e.currentTarget.style.backgroundColor = "#4f46e5"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; e.currentTarget.style.borderColor = "#94a3b8"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#fff"; e.currentTarget.style.borderColor = "#d1d5db"; }}
                 >
-                    <Save className="w-4 h-4" />
-                    {saving ? "Đang lưu..." : "Lưu cấu hình gộp khoa"}
+                    <Plus className="w-4 h-4" /> Thêm nhóm gộp mới
                 </button>
-            </div>
+            )}
+
+            {/* Save button — separated */}
+            {!readOnly && (
+                <div style={{
+                    borderTop: "1px solid #e2e8f0",
+                    marginTop: "20px", paddingTop: "16px",
+                    display: "flex", justifyContent: "flex-end",
+                }}>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        style={{
+                            display: "inline-flex", alignItems: "center", gap: "8px",
+                            padding: "10px 24px",
+                            fontSize: "0.85rem", fontWeight: 600,
+                            borderRadius: "10px", border: "none",
+                            backgroundColor: saving ? "#94a3b8" : "#4f46e5",
+                            color: "#fff",
+                            cursor: saving ? "not-allowed" : "pointer",
+                            transition: "all 0.15s",
+                            boxShadow: "0 1px 3px rgba(79,70,229,0.3)",
+                        }}
+                        onMouseEnter={(e) => { if (!saving) e.currentTarget.style.backgroundColor = "#4338ca"; }}
+                        onMouseLeave={(e) => { if (!saving) e.currentTarget.style.backgroundColor = "#4f46e5"; }}
+                    >
+                        <Save className="w-4 h-4" />
+                        {saving ? "Đang lưu..." : "Lưu cấu hình gộp khoa"}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

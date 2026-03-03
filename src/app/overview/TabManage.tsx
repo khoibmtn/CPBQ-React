@@ -46,6 +46,12 @@ export default function TabManage() {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
+    // Check unlock status from localStorage (shared with Settings page)
+    const [isUnlocked, setIsUnlocked] = useState(false);
+    useEffect(() => {
+        setIsUnlocked(localStorage.getItem("settings_unlocked") === "true");
+    }, []);
+
     /* ── Load initial metadata ── */
     useEffect(() => {
         fetch("/api/bq/overview/manage")
@@ -542,7 +548,7 @@ export default function TabManage() {
                         onSearch={handleSearch}
                         loading={searchLoading}
                         extraButtons={
-                            selectedRows.size > 0 ? (
+                            isUnlocked && selectedRows.size > 0 ? (
                                 <button
                                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                                     onClick={() => setShowDeleteConfirm(true)}
@@ -579,7 +585,7 @@ export default function TabManage() {
                         <DataTable
                             columns={tableColumns}
                             data={displayData}
-                            selectable
+                            selectable={isUnlocked}
                             selectedRows={selectedRows}
                             onSelectionChange={setSelectedRows}
                             stickyHeader
