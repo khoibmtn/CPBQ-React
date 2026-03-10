@@ -21,15 +21,11 @@ export default function OverviewPage() {
                 subtitle="Tổng hợp · Quản lý · Import dữ liệu thanh toán BHYT"
                 icon={BarChart3}
             />
-            <TabGroup tabs={TABS} defaultTab="pivot" storageKey="overview_tab">
-                {(activeTab) => (
-                    <>
-                        {activeTab === "pivot" && <TabPivot />}
-                        {activeTab === "manage" && <TabManage />}
-                        {activeTab === "import" && <TabImport />}
-                    </>
-                )}
-            </TabGroup>
+            <TabGroup tabs={TABS} defaultTab="pivot" storageKey="overview_tab" panels={{
+                pivot: <TabPivot />,
+                manage: <TabManage />,
+                import: <TabImport />,
+            }} />
         </>
     );
 }

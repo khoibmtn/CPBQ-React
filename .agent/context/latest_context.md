@@ -1,28 +1,25 @@
-# Latest Context — 2026-03-03 09:06
+# Latest Context — 2026-03-10 19:00
 
 ## Session Summary
-Implemented Config Tab Unlock mechanism for the CPBQ Dashboard.
+Implemented lazy-mount + keep-alive pattern to preserve page/tab state across navigation.
 
 ## Tasks Completed
-- Added `readOnly` prop to `LookupEditor`, `ProfileManager`, `MergeManager`
-- Added `extra` prop to `PageHeader` component
-- Updated `SettingsPage` with unlock/lock state using localStorage (`settings_unlocked` key) + prompt for code `123456`
-- When locked: hides Save/Add/Edit/Delete buttons, disables dropdowns in Profiles & MergeManager
-- PalettePicker (Giao diện tab) remains always editable
-- Extended lock to `TabImport` — shows locked message when not unlocked
-- Extended lock to `TabManage` — hides delete button and disables row selection when locked
-- Synced and deployed to main
+- Created `PageShell.tsx` — renders all visited pages, hides inactive ones with CSS `display:none`
+- Modified `layout.tsx` — integrated PageShell alongside hidden Next.js `{children}` for URL routing
+- Added `panels` prop to `TabGroup.tsx` — lazy-mount + CSS-hide for individual tabs within pages
+- Updated `SettingsPage` — uses `panels` prop (fixes BigQuery rate limit errors from tab switching)
+- Updated `OverviewPage` — uses `panels` prop (sub-tabs keep state)
+- Added `useMemo` to SettingsPage panels to prevent flicker on lock/unlock toggle
 
 ## Key Files Modified
-- `src/app/settings/page.tsx` — unlock state + localStorage + button in header
-- `src/components/settings/LookupEditor.tsx` — readOnly prop
-- `src/components/settings/ProfileManager.tsx` — readOnly prop + disabled dropdown
-- `src/components/settings/MergeManager.tsx` — readOnly prop + disabled dropdown
-- `src/components/ui/PageHeader.tsx` — added `extra` prop
-- `src/app/overview/TabImport.tsx` — locked guard with message
-- `src/app/overview/TabManage.tsx` — hide delete, disable selection
+- `src/components/layout/PageShell.tsx` [NEW] — lazy-mount + keep-alive page shell
+- `src/app/layout.tsx` — integrated PageShell
+- `src/components/ui/TabGroup.tsx` — added `panels` prop for keep-alive tabs
+- `src/app/settings/page.tsx` — panels prop + useMemo stabilization
+- `src/app/overview/page.tsx` — panels prop
 
 ## Architecture Notes
-- Unlock state stored in localStorage key `settings_unlocked` = `"true"`
-- Unlock code: `123456` (hardcoded)
-- All components read the same localStorage key for consistency
+- **Page-level**: `PageShell` tracks `visited: Set<string>`, renders pages only after first visit, hides inactive with `display:none`
+- **Tab-level**: `TabGroup.panels` prop does the same for tabs within a page
+- **URL routing**: Still uses Next.js `<Link>` + `usePathname()`, `{children}` hidden but present
+- **Backward compat**: `TabGroup` still supports old `children` render-prop pattern

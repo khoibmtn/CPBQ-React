@@ -13,11 +13,17 @@ interface TabGroupProps {
     tabs: Tab[];
     defaultTab?: string;
     storageKey?: string;
-    children: (activeTab: string) => ReactNode;
+    /** OLD: render-prop (conditional rendering, causes remount) */
+    children?: (activeTab: string) => ReactNode;
+    /** NEW: lazy-mount + keep-alive — tab content stays in React tree */
+    panels?: Record<string, ReactNode>;
 }
 
-export default function TabGroup({ tabs, defaultTab, storageKey, children }: TabGroupProps) {
+export default function TabGroup({ tabs, defaultTab, storageKey, children, panels }: TabGroupProps) {
     const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || "");
+
+    // Track which tabs have been visited (for lazy-mount)
+    const [visited, setVisited] = useState<Set<string>>(() => new Set([activeTab]));
 
     const isFirstRender = useRef(true);
     useEffect(() => {
@@ -28,6 +34,10 @@ export default function TabGroup({ tabs, defaultTab, storageKey, children }: Tab
                     const stored = sessionStorage.getItem(storageKey);
                     if (stored && tabs.some((t) => t.id === stored)) {
                         setActiveTab(stored);
+                        setVisited((prev) => {
+                            if (prev.has(stored)) return prev;
+                            return new Set(prev).add(stored);
+                        });
                     }
                 } catch { /* ignore */ }
             }
@@ -37,6 +47,14 @@ export default function TabGroup({ tabs, defaultTab, storageKey, children }: Tab
             try { sessionStorage.setItem(storageKey, activeTab); } catch { /* ignore */ }
         }
     }, [storageKey, activeTab, tabs]);
+
+    // Add to visited set when tab changes
+    useEffect(() => {
+        setVisited((prev) => {
+            if (prev.has(activeTab)) return prev;
+            return new Set(prev).add(activeTab);
+        });
+    }, [activeTab]);
 
     const renderIcon = (icon?: LucideIcon | string) => {
         if (!icon) return null;
@@ -69,7 +87,23 @@ export default function TabGroup({ tabs, defaultTab, storageKey, children }: Tab
                     );
                 })}
             </div>
-            <div>{children(activeTab)}</div>
+            <div>
+                {panels
+                    ? tabs.map((tab) => {
+                        if (!visited.has(tab.id)) return null;
+                        return (
+                            <div
+                                key={tab.id}
+                                style={{ display: activeTab === tab.id ? "block" : "none" }}
+                            >
+                                {panels[tab.id]}
+                            </div>
+                        );
+                    })
+                    : children?.(activeTab)
+                }
+            </div>
         </div>
     );
 }
+

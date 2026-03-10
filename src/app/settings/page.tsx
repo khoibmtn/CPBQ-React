@@ -7,7 +7,7 @@ import ProfileManager from "@/components/settings/ProfileManager";
 import MergeManager from "@/components/settings/MergeManager";
 import { Settings, ClipboardList, Building2, Building, BarChart3, GitMerge, Palette, Lock, LockOpen } from "lucide-react";
 import { usePalette, PALETTES, type PaletteKey } from "@/components/ThemeProvider";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 const STORAGE_KEY = "settings_unlocked";
 const UNLOCK_CODE = "123456";
@@ -115,6 +115,16 @@ export default function SettingsPage() {
 
     const readOnly = !unlocked;
 
+    // Stabilize panels so lock/unlock doesn't remount tab content
+    const panels = useMemo(() => ({
+        loaikcb: <LookupEditor tableName="lookup_loaikcb" columns={LOAIKCB_COLUMNS} readOnly={readOnly} />,
+        cskcb: <LookupEditor tableName="lookup_cskcb" columns={CSKCB_COLUMNS} readOnly={readOnly} />,
+        khoa: <LookupEditor tableName="lookup_khoa" columns={KHOA_COLUMNS} readOnly={readOnly} />,
+        profiles: <ProfileManager readOnly={readOnly} />,
+        merge: <MergeManager readOnly={readOnly} />,
+        palette: <PalettePicker />,
+    }), [readOnly]);
+
     return (
         <>
             <PageHeader
@@ -125,8 +135,8 @@ export default function SettingsPage() {
                     <button
                         onClick={handleToggleLock}
                         className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${unlocked
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                                : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                            : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
                             }`}
                     >
                         {unlocked ? (
@@ -138,24 +148,7 @@ export default function SettingsPage() {
                 }
             />
 
-            <TabGroup tabs={TABS} defaultTab="loaikcb" storageKey="settings_tab">
-                {(activeTab) => (
-                    <>
-                        {activeTab === "loaikcb" && (
-                            <LookupEditor tableName="lookup_loaikcb" columns={LOAIKCB_COLUMNS} readOnly={readOnly} />
-                        )}
-                        {activeTab === "cskcb" && (
-                            <LookupEditor tableName="lookup_cskcb" columns={CSKCB_COLUMNS} readOnly={readOnly} />
-                        )}
-                        {activeTab === "khoa" && (
-                            <LookupEditor tableName="lookup_khoa" columns={KHOA_COLUMNS} readOnly={readOnly} />
-                        )}
-                        {activeTab === "profiles" && <ProfileManager readOnly={readOnly} />}
-                        {activeTab === "merge" && <MergeManager readOnly={readOnly} />}
-                        {activeTab === "palette" && <PalettePicker />}
-                    </>
-                )}
-            </TabGroup>
+            <TabGroup tabs={TABS} defaultTab="loaikcb" storageKey="settings_tab" panels={panels} />
         </>
     );
 }
