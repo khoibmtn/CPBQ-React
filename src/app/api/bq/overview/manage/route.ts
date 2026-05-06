@@ -172,12 +172,16 @@ export async function POST(request: Request) {
 /**
  * DELETE /api/bq/overview/manage
  * Body: { rows: Record<string, unknown>[] }
- * Deletes rows by composite key
+ * Deletes rows by composite key — batched for performance
  */
 export async function DELETE(request: Request) {
     try {
         const body = await request.json();
         const { rows } = body as { rows: Record<string, unknown>[] };
+
+        if (!rows || rows.length === 0) {
+            return NextResponse.json({ deletedCount: 0, total: 0 });
+        }
 
         const ROW_KEY_COLS = [
             "ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra",
@@ -188,10 +192,10 @@ export async function DELETE(request: Request) {
         let deletedCount = 0;
         const errors: string[] = [];
 
-        for (const row of rows) {
+        /** Build WHERE conditions for a single row */
+        const buildRowCondition = (row: Record<string, unknown>): string => {
             const conditions: string[] = [];
             for (const col of ROW_KEY_COLS) {
-                // Unwrap BQ `{ value: "..." }` objects
                 let val = row[col];
                 if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
                     val = (val as Record<string, unknown>).value;
@@ -201,7 +205,6 @@ export async function DELETE(request: Request) {
                 } else if (typeof val === "number") {
                     conditions.push(`${col} = ${val}`);
                 } else if (DATETIME_COLS.has(col)) {
-                    // Use DATETIME() for proper datetime comparison
                     const safeVal = String(val).replace(/'/g, "\\'");
                     conditions.push(`${col} = DATETIME('${safeVal}')`);
                 } else {
@@ -220,19 +223,29 @@ export async function DELETE(request: Request) {
                 conditions.push(`upload_timestamp = TIMESTAMP('${safeTs}')`);
             }
 
-            const whereClause = conditions.join(" AND ");
+            return `(${conditions.join(" AND ")})`;
+        };
+
+        // Batch rows into chunks to avoid exceeding BigQuery query size limits
+        const BATCH_SIZE = 500;
+        for (let batchStart = 0; batchStart < rows.length; batchStart += BATCH_SIZE) {
+            const batch = rows.slice(batchStart, batchStart + BATCH_SIZE);
+            const rowConditions = batch.map(buildRowCondition);
+            const whereClause = rowConditions.join("\n    OR ");
             const deleteQ = `DELETE FROM \`${FULL_TABLE_ID}\` WHERE ${whereClause}`;
-            console.log("[DELETE] SQL:", deleteQ);
+
+            console.log(`[DELETE] Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: ${batch.length} rows`);
             try {
                 const [job] = await client.createQueryJob({ query: deleteQ });
-                const [results] = await job.getQueryResults();
-                const numDmlAffectedRows = job.metadata?.statistics?.query?.numDmlAffectedRows;
+                await job.getQueryResults();
+                // Must call getMetadata() after job completes to get DML stats
+                const [meta] = await job.getMetadata();
+                const numDmlAffectedRows = meta?.statistics?.query?.numDmlAffectedRows;
                 console.log("[DELETE] Affected rows:", numDmlAffectedRows);
                 deletedCount += Number(numDmlAffectedRows) || 0;
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
                 console.error("[DELETE] Error:", msg);
-                // Translate streaming buffer error to user-friendly message
                 if (msg.includes("streaming buffer")) {
                     errors.push("Dữ liệu vừa import chưa thể xóa ngay. Vui lòng đợi 30 phút và thử lại.");
                 } else {

@@ -23,7 +23,7 @@ export interface ProcessedSheet {
     matchedCols: number;
     validRows: Row[];         // transformed + validated, with _idx
     invalidCount: number;
-    issues: { col: string; count: number }[];
+    issues: { col: string; count: number; reason: string; samples: string[] }[];
     summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
 }
 
@@ -273,32 +273,56 @@ function parseDatetimeStr(val: unknown): string | null {
 function validateRows(rows: Row[]): {
     valid: Row[];
     invalid: Row[];
-    issues: { col: string; count: number }[];
+    issues: { col: string; count: number; reason: string; samples: string[] }[];
 } {
-    const issueMap = new Map<string, number>();
+    const issueMap = new Map<string, { count: number; reason: string; samples: string[] }>();
     const valid: Row[] = [];
     const invalid: Row[] = [];
+
+    const MAX_SAMPLES = 5;
+
+    const addIssue = (col: string, reason: string, val: unknown) => {
+        const existing = issueMap.get(col);
+        if (existing) {
+            existing.count++;
+            if (existing.samples.length < MAX_SAMPLES) {
+                existing.samples.push(String(val ?? "(trống)"));
+            }
+        } else {
+            issueMap.set(col, {
+                count: 1,
+                reason,
+                samples: [String(val ?? "(trống)")],
+            });
+        }
+    };
 
     for (const row of rows) {
         let isValid = true;
         for (const col of REQUIRED_COLS) {
             const val = row[col as string];
             if (val == null || val === "" || val === "nan") {
-                issueMap.set(col, (issueMap.get(col) || 0) + 1);
+                addIssue(col, "Giá trị bắt buộc nhưng bị trống hoặc null", val);
                 isValid = false;
                 continue;
             }
             if (col === "gioi_tinh" && ![1, 2].includes(Number(val))) {
-                issueMap.set(col, (issueMap.get(col) || 0) + 1);
+                addIssue(col, "Phải là 1 (Nam) hoặc 2 (Nữ)", val);
                 isValid = false;
             } else if (col === "thang_qt") {
                 const num = Number(val);
                 if (isNaN(num) || num < 1 || num > 12) {
-                    issueMap.set(col, (issueMap.get(col) || 0) + 1);
+                    addIssue(col, "Phải là số nguyên từ 1 đến 12", val);
+                    isValid = false;
+                }
+            } else if (col === "nam_qt") {
+                const num = Number(val);
+                if (isNaN(num) || !Number.isInteger(num) || num < 2000 || num > 2099) {
+                    addIssue(col, "Phải là năm 4 chữ số (2000–2099)", val);
                     isValid = false;
                 }
             } else if ((col === "t_tongchi" || col === "t_bhtt") && isNaN(Number(val))) {
-                issueMap.set(col, (issueMap.get(col) || 0) + 1);
+                addIssue(col, "Phải là giá trị số", val);
                 isValid = false;
             }
         }
@@ -307,7 +331,9 @@ function validateRows(rows: Row[]): {
 
     return {
         valid, invalid,
-        issues: Array.from(issueMap.entries()).map(([col, count]) => ({ col, count })),
+        issues: Array.from(issueMap.entries()).map(([col, data]) => ({
+            col, count: data.count, reason: data.reason, samples: data.samples,
+        })),
     };
 }
 

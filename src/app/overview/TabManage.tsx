@@ -215,14 +215,22 @@ export default function TabManage() {
     };
 
     /* ── Delete ── */
+    const DELETE_KEY_COLS = ["ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra", "upload_timestamp"];
+
     const handleDelete = async () => {
         setShowDeleteConfirm(false);
         setDeleteLoading(true);
         setError(null);
 
-        const rowsToDelete = Array.from(selectedRows).map(
-            (idx) => displayData[idx]
-        );
+        // Only send key columns needed for deletion (not the entire row data)
+        const rowsToDelete = Array.from(selectedRows).map((idx) => {
+            const fullRow = displayData[idx];
+            const keyRow: Record<string, unknown> = {};
+            for (const col of DELETE_KEY_COLS) {
+                if (fullRow[col] !== undefined) keyRow[col] = fullRow[col];
+            }
+            return keyRow;
+        });
 
         try {
             const res = await fetch("/api/bq/overview/manage", {
@@ -268,8 +276,9 @@ export default function TabManage() {
                 const newDisplay = displayData.filter((_, i) => !deletedIndices.has(i));
                 setDisplayData(newDisplay);
                 if (data) {
+                    const fullRowsToDelete = Array.from(selectedRows).map((idx) => displayData[idx]);
                     const rowsToRemoveKeys = new Set(
-                        rowsToDelete.map((r) => JSON.stringify(r))
+                        fullRowsToDelete.map((r) => JSON.stringify(r))
                     );
                     setData(data.filter((r) => !rowsToRemoveKeys.has(JSON.stringify(r))));
                 }

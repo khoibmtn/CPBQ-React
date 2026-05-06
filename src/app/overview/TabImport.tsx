@@ -1,7 +1,7 @@
 "use client";
 import { Loader2, Trash2 } from "lucide-react";
 
-import { useState, useRef, useMemo, useEffect, useCallback, Fragment } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback, Fragment } from "react";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -17,7 +17,7 @@ interface SheetData {
     invalidCount: number;
     dupCount: number;
     newCount: number;
-    issues: { col: string; count: number }[];
+    issues: { col: string; count: number; reason: string; samples: string[] }[];
     summary: { period: string; maCSKCB: string; rows: number; tongChi: string }[];
 }
 
@@ -1113,14 +1113,14 @@ export default function TabImport() {
                                 >
                                     {sheets.map((s) => (
                                         <option key={s.sheetName} value={s.sheetName}>
-                                            📄 {s.sheetName} ({s.matchedCols} cột, {s.validRows.length} dòng)
+                                            📄 {s.sheetName} ({s.matchedCols} cột, {s.validRows.length} dòng{s.invalidCount > 0 ? `, ${s.invalidCount} loại bỏ` : ""})
                                         </option>
                                     ))}
                                 </select>
                             ) : (
                                 <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 text-sm font-medium text-green-700 border border-green-200">
                                     📄 {sheets[0].sheetName}
-                                    <span className="opacity-75 text-xs font-normal">({sheets[0].matchedCols} cột, {sheets[0].validRows.length} dòng)</span>
+                                    <span className="opacity-75 text-xs font-normal">({sheets[0].matchedCols} cột, {sheets[0].validRows.length} dòng{sheets[0].invalidCount > 0 ? <span className="text-red-500 font-semibold">, {sheets[0].invalidCount} loại bỏ</span> : ""})</span>
                                 </span>
                             )}
                         </div>
@@ -1284,7 +1284,62 @@ export default function TabImport() {
                         {selectedTab === "summary" && currentSheet && (() => {
                             const pivot = buildPivotSummary(currentSheet.validRows);
                             if (!pivot) return (
-                                <div className="px-5 py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
+                                <div className="px-4 pb-4">
+                                    {/* Re-validate button */}
+                                    <div className="flex justify-end mb-3">
+                                        <button
+                                            onClick={handleValidate}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-md transition-colors shadow-sm cursor-pointer"
+                                        >
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                                            Xác thực lại
+                                        </button>
+                                    </div>
+
+                                    {/* Invalid rows warning */}
+                                    {currentSheet.invalidCount > 0 && (
+                                        <div className="mb-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                                            <div className="flex items-center gap-2 font-semibold mb-1">
+                                                <span className="text-base">🚫</span>
+                                                Đã loại bỏ <strong>{currentSheet.invalidCount.toLocaleString()}</strong> dòng không hợp lệ
+                                            </div>
+                                            {currentSheet.issues.length > 0 && (
+                                                <ul className="ml-6 mt-1 list-disc text-xs text-red-600 space-y-0.5">
+                                                    {currentSheet.issues.map((iss) => (
+                                                        <li key={iss.col}>
+                                                            <strong>{COL_LABELS[iss.col] || iss.col}</strong> ({iss.col}): <strong>{iss.count}</strong> lỗi — {iss.reason}
+                                                            {iss.samples.length > 0 && (
+                                                                <span className="text-red-400"> (ví dụ: {iss.samples.map((s, i) => <code key={i} className="bg-red-100 px-1 rounded text-[11px]">{s}</code>).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, ', ', el], [])})</span>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Validation warnings */}
+                                    {validationWarnings.length > 0 && (
+                                        <div className="space-y-2">
+                                            {validationWarnings.map((w, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`flex items-start gap-2 px-4 py-3 rounded-lg text-sm ${w.type === "error"
+                                                        ? "bg-red-50 border border-red-200 text-red-700"
+                                                        : "bg-amber-50 border border-amber-200 text-amber-700"
+                                                        }`}
+                                                >
+                                                    <span className="text-base mt-0.5">{w.type === "error" ? "🚨" : "⚠️"}</span>
+                                                    <span>{w.msg}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {currentSheet.invalidCount === 0 && validationWarnings.length === 0 && (
+                                        <div className="py-8 text-center text-gray-400">Không có dữ liệu tóm tắt</div>
+                                    )}
+                                </div>
                             );
                             const dash = "—";
                             const fmtNum = (v: number) => v === 0 ? dash : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
@@ -1376,6 +1431,29 @@ export default function TabImport() {
                                             Xác thực lại
                                         </button>
                                     </div>
+
+                                    {/* Invalid rows warning */}
+                                    {currentSheet.invalidCount > 0 && (
+                                        <div className="mb-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                                            <div className="flex items-center gap-2 font-semibold mb-1">
+                                                <span className="text-base">🚫</span>
+                                                Đã loại bỏ <strong>{currentSheet.invalidCount.toLocaleString()}</strong> dòng không hợp lệ
+                                            </div>
+                                            {currentSheet.issues.length > 0 && (
+                                                <ul className="ml-6 mt-1 list-disc text-xs text-red-600 space-y-0.5">
+                                                    {currentSheet.issues.map((iss) => (
+                                                        <li key={iss.col}>
+                                                            <strong>{COL_LABELS[iss.col] || iss.col}</strong> ({iss.col}): <strong>{iss.count}</strong> lỗi — {iss.reason}
+                                                            {iss.samples.length > 0 && (
+                                                                <span className="text-red-400"> (ví dụ: {iss.samples.map((s, i) => <code key={i} className="bg-red-100 px-1 rounded text-[11px]">{s}</code>).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, ', ', el], [])})</span>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Table */}
                                     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
                                         <table className="w-full border-collapse" style={{ fontVariantNumeric: "tabular-nums" }}>

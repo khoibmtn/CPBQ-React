@@ -23,6 +23,8 @@ interface DataTableProps {
     emptyMessage?: string;
     stickyHeader?: boolean;
     rowClassName?: (globalIdx: number) => string;
+    /** Total number of selectable items across all data for "select all" feature */
+    totalSelectableCount?: number;
 }
 
 export default function DataTable({
@@ -37,6 +39,7 @@ export default function DataTable({
     emptyMessage = "Không có dữ liệu",
     stickyHeader = false,
     rowClassName,
+    totalSelectableCount,
 }: DataTableProps) {
     const [pageSize, setPageSize] = useState(initialPageSize);
     const [currentPage, setCurrentPage] = useState(0);
@@ -66,20 +69,61 @@ export default function DataTable({
         return indices;
     }, [startIdx, endIdx, disabledRows]);
 
+    // Count all selectable indices across all data
+    const allSelectableCount = totalSelectableCount ?? (() => {
+        let count = 0;
+        for (let i = 0; i < data.length; i++) {
+            if (!disabledRows?.has(i)) count++;
+        }
+        return count;
+    })();
+
     const allPageSelected =
         selectable &&
         selectablePageIndices.length > 0 &&
         selectablePageIndices.every((i) => selectedRows?.has(i));
 
+    const allDataSelected =
+        selectable &&
+        allSelectableCount > 0 &&
+        (selectedRows?.size ?? 0) >= allSelectableCount;
+
+    // Show "select all" banner when current page is fully selected but not all data
+    const showSelectAllBanner =
+        allPageSelected && !allDataSelected && allSelectableCount > selectablePageIndices.length;
+
     const handleSelectAll = () => {
         if (!onSelectionChange) return;
-        const newSet = new Set(selectedRows);
-        if (allPageSelected) {
-            for (const i of selectablePageIndices) newSet.delete(i);
+        if (allDataSelected) {
+            // Deselect everything
+            onSelectionChange(new Set());
+        } else if (allPageSelected) {
+            // Page is already fully selected → select ALL data
+            const newSet = new Set<number>();
+            for (let i = 0; i < data.length; i++) {
+                if (!disabledRows?.has(i)) newSet.add(i);
+            }
+            onSelectionChange(newSet);
         } else {
+            // Select current page
+            const newSet = new Set(selectedRows);
             for (const i of selectablePageIndices) newSet.add(i);
+            onSelectionChange(newSet);
+        }
+    };
+
+    const handleSelectAllData = () => {
+        if (!onSelectionChange) return;
+        const newSet = new Set<number>();
+        for (let i = 0; i < data.length; i++) {
+            if (!disabledRows?.has(i)) newSet.add(i);
         }
         onSelectionChange(newSet);
+    };
+
+    const handleClearSelection = () => {
+        if (!onSelectionChange) return;
+        onSelectionChange(new Set());
     };
 
     const handleSelectRow = (globalIdx: number) => {
@@ -116,9 +160,10 @@ export default function DataTable({
                                 <th className="w-10 text-center border px-2 py-2" style={{ background: 'var(--color-primary-200)', borderColor: 'var(--color-primary-300)' }}>
                                     <input
                                         type="checkbox"
-                                        checked={allPageSelected}
+                                        checked={allDataSelected || allPageSelected}
+                                        ref={(el) => { if (el) el.indeterminate = allPageSelected && !allDataSelected; }}
                                         onChange={handleSelectAll}
-                                        title="Chọn tất cả trang này"
+                                        title={allDataSelected ? "Bỏ chọn tất cả" : allPageSelected ? `Chọn tất cả ${allSelectableCount.toLocaleString()} dòng` : "Chọn tất cả trang này"}
                                         className="accent-primary-600"
                                     />
                                 </th>
@@ -139,6 +184,39 @@ export default function DataTable({
                                 </th>
                             ))}
                         </tr>
+                        {/* Select-all banner */}
+                        {showSelectAllBanner && (
+                            <tr>
+                                <td
+                                    colSpan={columns.length + 1}
+                                    className="text-center text-xs py-1.5 bg-primary-50 border-b border-primary-200"
+                                >
+                                    Đã chọn tất cả <strong>{selectablePageIndices.length}</strong> dòng trang này.{" "}
+                                    <button
+                                        className="text-primary-600 font-semibold hover:underline cursor-pointer"
+                                        onClick={handleSelectAllData}
+                                    >
+                                        Chọn tất cả {allSelectableCount.toLocaleString()} dòng
+                                    </button>
+                                </td>
+                            </tr>
+                        )}
+                        {allDataSelected && (selectedRows?.size ?? 0) > selectablePageIndices.length && (
+                            <tr>
+                                <td
+                                    colSpan={columns.length + 1}
+                                    className="text-center text-xs py-1.5 bg-primary-50 border-b border-primary-200"
+                                >
+                                    Đã chọn tất cả <strong>{allSelectableCount.toLocaleString()}</strong> dòng.{" "}
+                                    <button
+                                        className="text-red-600 font-semibold hover:underline cursor-pointer"
+                                        onClick={handleClearSelection}
+                                    >
+                                        Bỏ chọn
+                                    </button>
+                                </td>
+                            </tr>
+                        )}
                     </thead>
                     <tbody>
                         {pageData.map((row, localIdx) => {
