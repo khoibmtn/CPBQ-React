@@ -15,16 +15,9 @@ export async function GET() {
         // Derive columns from schema constant — no BQ query needed
         const columns = SCHEMA_COLS.filter((c) => !MANAGE_EXCLUDE_COLS.has(c));
 
-        // Single lightweight query for available years
-        const yearsQuery = `
-            SELECT DISTINCT nam_qt
-            FROM \`${FULL_TABLE_ID}\`
-            ORDER BY nam_qt DESC
-        `;
-        const yearsRows = await runQuery<{ nam_qt: number }>(yearsQuery);
-        const years = yearsRows.map((r) => r.nam_qt);
-
-        return NextResponse.json({ columns, years });
+        // Years are fetched client-side via /api/bq/overview (shared endpoint)
+        // to avoid duplicate concurrent BQ queries that cause Vercel timeout
+        return NextResponse.json({ columns });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return NextResponse.json({ error: msg }, { status: 500 });

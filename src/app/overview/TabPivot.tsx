@@ -43,7 +43,12 @@ export default function TabPivot() {
     };
 
     // Load available years (lightweight — no heavy queries)
+    // Skip if already cached from sessionStorage
     useEffect(() => {
+        if (years.length > 0) {
+            setInitialLoading(false);
+            return;
+        }
         fetch("/api/bq/overview")
             .then((r) => safeJson(r))
             .then((d) => {

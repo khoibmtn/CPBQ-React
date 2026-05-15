@@ -152,34 +152,58 @@ export default function TabManage() {
 
     /* ── Load initial metadata ── */
     useEffect(() => {
-        fetch("/api/bq/overview/manage")
-            .then((r) => safeJson(r))
-            .then((d) => {
-                if (d.error) {
-                    setError(d.error);
-                    setInitialLoading(false);
-                    return;
+        // Skip if years already cached from sessionStorage
+        if (years.length > 0 && columns.length > 0) {
+            setInitialLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadMeta = async () => {
+            try {
+                // Fetch columns (static, no BQ query — instant)
+                const colRes = await fetch("/api/bq/overview/manage");
+                const colData = await safeJson(colRes);
+                if (cancelled) return;
+                if (colData.columns) setColumns(colData.columns);
+
+                // Fetch years from shared endpoint (same as TabPivot — avoids duplicate BQ calls)
+                if (years.length === 0) {
+                    const yrsRes = await fetch("/api/bq/overview");
+                    const yrsData = await safeJson(yrsRes);
+                    if (cancelled) return;
+                    if (yrsData.error) {
+                        setError(yrsData.error);
+                        setInitialLoading(false);
+                        return;
+                    }
+                    const yrs: number[] = yrsData.years || [];
+                    setYears(yrs);
+                    if (yrs.length > 0 && fromYear === 0) {
+                        const currentYear = new Date().getFullYear();
+                        const bestYear = yrs.includes(currentYear) ? currentYear : yrs[0];
+                        setFromYear(bestYear);
+                        setToYear(bestYear);
+                    }
                 }
-                const yrs: number[] = d.years || [];
-                const cols: string[] = d.columns || [];
-                setYears(yrs);
-                setColumns(cols);
-                if (yrs.length > 0 && fromYear === 0) {
-                    const currentYear = new Date().getFullYear();
-                    // Default both to current year (or nearest available)
-                    const bestYear = yrs.includes(currentYear) ? currentYear : yrs[0];
-                    setFromYear(bestYear);
-                    setToYear(bestYear);
-                }
+
+                // Set default search field
+                const cols = columns.length > 0 ? columns : (colData.columns || []);
                 if (cols.length > 0 && !conditions[0].field) {
                     setConditions([{ field: cols[0], keyword: "", operator: "AND" }]);
                 }
                 setInitialLoading(false);
-            })
-            .catch((e) => {
-                setError(e.message);
-                setInitialLoading(false);
-            });
+            } catch (e) {
+                if (!cancelled) {
+                    setError(e instanceof Error ? e.message : String(e));
+                    setInitialLoading(false);
+                }
+            }
+        };
+
+        loadMeta();
+        return () => { cancelled = true; };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ── Determine actual method ── */
