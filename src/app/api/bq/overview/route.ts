@@ -66,20 +66,22 @@ export async function POST(request: Request) {
             const { year } = body as { year: number };
             const query = `
                 SELECT
-                    thang_qt,
-                    ml2,
-                    v.ma_cskcb,
+                    t.thang_qt,
+                    lk.ml2,
+                    t.ma_cskcb,
                     cs.ten_cskcb,
                     COUNT(*) AS so_luot,
-                    SUM(t_tongchi) AS tong_chi
-                FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\` v
+                    SUM(t.t_tongchi) AS tong_chi
+                FROM \`${FULL_TABLE_ID}\` t
+                LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.lookup_loaikcb\` lk
+                    ON CAST(t.ma_loaikcb AS STRING) = CAST(lk.ma_loaikcb AS STRING)
                 LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.lookup_cskcb\` cs
-                    ON v.ma_cskcb = CAST(cs.ma_cskcb AS STRING)
-                    AND cs.valid_from <= (${year} * 10000 + v.thang_qt * 100 + 1)
-                    AND (cs.valid_to IS NULL OR cs.valid_to >= (${year} * 10000 + v.thang_qt * 100 + 1))
-                WHERE nam_qt = ${year}
-                GROUP BY thang_qt, ml2, v.ma_cskcb, cs.ten_cskcb
-                ORDER BY thang_qt, ml2, v.ma_cskcb
+                    ON t.ma_cskcb = CAST(cs.ma_cskcb AS STRING)
+                    AND cs.valid_from <= (${year} * 10000 + t.thang_qt * 100 + 1)
+                    AND (cs.valid_to IS NULL OR cs.valid_to >= (${year} * 10000 + t.thang_qt * 100 + 1))
+                WHERE t.nam_qt = ${year}
+                GROUP BY t.thang_qt, lk.ml2, t.ma_cskcb, cs.ten_cskcb
+                ORDER BY t.thang_qt, lk.ml2, t.ma_cskcb
             `;
             const rows = await runQuery(query);
             return NextResponse.json({ data: rows });

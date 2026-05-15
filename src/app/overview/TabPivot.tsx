@@ -86,9 +86,10 @@ export default function TabPivot() {
         }
     }, [selectedYear]);
 
+    // Auto-fetch only if we don't already have cached data for this year
     useEffect(() => {
-        if (selectedYear) fetchPivot();
-    }, [selectedYear, fetchPivot]);
+        if (selectedYear && rawData.length === 0) fetchPivot();
+    }, [selectedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ── Build pivot ── */
 

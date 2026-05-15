@@ -27,6 +27,73 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EditRecordModal from "./EditRecordModal";
 import * as XLSX from "xlsx";
 
+/* ── Module-level constants (avoid re-creation on every render) ── */
+
+const COL_LABELS: Record<string, string> = {
+    stt: "STT", ma_bn: "Mã BN", ho_ten: "Họ tên", ngay_sinh: "Ngày sinh",
+    gioi_tinh: "Giới tính", dia_chi: "Địa chỉ", ma_the: "Mã thẻ",
+    ma_dkbd: "Mã ĐKBD", gt_the_tu: "GT thẻ từ", gt_the_den: "GT thẻ đến",
+    ma_benh: "Mã bệnh", ma_benhkhac: "Mã bệnh khác",
+    ma_lydo_vvien: "Lý do VV", ma_noi_chuyen: "Nơi chuyển",
+    ngay_vao: "Ngày vào", ngay_ra: "Ngày ra", so_ngay_dtri: "Số ngày ĐT",
+    ket_qua_dtri: "Kết quả ĐT", tinh_trang_rv: "Tình trạng RV",
+    t_tongchi: "Tổng chi", t_xn: "Xét nghiệm", t_cdha: "CĐHA",
+    t_thuoc: "Thuốc", t_mau: "Máu", t_pttt: "PTTT", t_vtyt: "VTYT",
+    t_dvkt_tyle: "DVKT tỷ lệ", t_thuoc_tyle: "Thuốc tỷ lệ",
+    t_vtyt_tyle: "VTYT tỷ lệ", t_kham: "Khám", t_giuong: "Giường",
+    t_vchuyen: "Vận chuyển", t_bntt: "BN thanh toán", t_bhtt: "BH thanh toán",
+    t_ngoaids: "Ngoài DS", ma_khoa: "Mã khoa", nam_qt: "Năm QT",
+    thang_qt: "Tháng QT", ma_khuvuc: "Mã khu vực", ma_loaikcb: "Loại KCB",
+    ma_cskcb: "Mã CSKCB", noi_ttoan: "Nơi thanh toán", giam_dinh: "Giám định",
+    t_xuattoan: "Xuất toán", t_nguonkhac: "Nguồn khác",
+    t_datuyen: "Đa tuyến", t_vuottran: "Vượt trần",
+    is_normalized: "Chuẩn hóa", normalized_at: "Ngày chuẩn hóa",
+    ten_cskcb: "Tên CSKCB", khoa: "Khoa", ml2: "Nội/Ngoại trú", ml4: "Loại KCB",
+    ma_benh_chinh: "Mã bệnh chính", upload_timestamp: "Ngày tải lên",
+};
+
+const FULL_EXPORT_COLS: readonly string[] = [
+    "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh", "dia_chi",
+    "ma_the", "ma_dkbd", "gt_the_tu", "gt_the_den",
+    "ma_benh", "ma_benh_chinh", "ma_benhkhac",
+    "ma_lydo_vvien", "ma_noi_chuyen", "ngay_vao", "ngay_ra", "so_ngay_dtri",
+    "ket_qua_dtri", "tinh_trang_rv",
+    "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
+    "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
+    "t_vchuyen", "t_bntt", "t_bhtt", "t_ngoaids",
+    "ma_khoa", "khoa", "nam_qt", "thang_qt", "ma_khuvuc",
+    "ma_loaikcb", "ml2", "ml4",
+    "ma_cskcb", "ten_cskcb",
+    "noi_ttoan", "giam_dinh",
+    "t_xuattoan", "t_nguonkhac", "t_datuyen", "t_vuottran",
+];
+
+const DATE_INT_COLS = new Set(["ngay_sinh", "gt_the_tu", "gt_the_den"]);
+const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
+
+function unwrapBQ(val: unknown): unknown {
+    if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
+        return (val as Record<string, unknown>).value;
+    }
+    return val;
+}
+
+function dateToInt(val: unknown): number | unknown {
+    if (val == null || val === "") return val;
+    const s = String(val).trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return Number(`${m[1]}${m[2]}${m[3]}`);
+    return val;
+}
+
+function datetimeToCompact(val: unknown): string | unknown {
+    if (val == null || val === "") return val;
+    const s = String(val).trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (m) return `'${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`;
+    return val;
+}
+
 export default function TabManage() {
     const AUTO_THRESHOLD = 3; // ≤3 years → RAM, >3 → BigQuery
 
@@ -386,28 +453,7 @@ export default function TabManage() {
     };
 
     /* ── Column display config ── */
-    const COL_LABELS: Record<string, string> = {
-        stt: "STT", ma_bn: "Mã BN", ho_ten: "Họ tên", ngay_sinh: "Ngày sinh",
-        gioi_tinh: "Giới tính", dia_chi: "Địa chỉ", ma_the: "Mã thẻ",
-        ma_dkbd: "Mã ĐKBD", gt_the_tu: "GT thẻ từ", gt_the_den: "GT thẻ đến",
-        ma_benh: "Mã bệnh", ma_benhkhac: "Mã bệnh khác",
-        ma_lydo_vvien: "Lý do VV", ma_noi_chuyen: "Nơi chuyển",
-        ngay_vao: "Ngày vào", ngay_ra: "Ngày ra", so_ngay_dtri: "Số ngày ĐT",
-        ket_qua_dtri: "Kết quả ĐT", tinh_trang_rv: "Tình trạng RV",
-        t_tongchi: "Tổng chi", t_xn: "Xét nghiệm", t_cdha: "CĐHA",
-        t_thuoc: "Thuốc", t_mau: "Máu", t_pttt: "PTTT", t_vtyt: "VTYT",
-        t_dvkt_tyle: "DVKT tỷ lệ", t_thuoc_tyle: "Thuốc tỷ lệ",
-        t_vtyt_tyle: "VTYT tỷ lệ", t_kham: "Khám", t_giuong: "Giường",
-        t_vchuyen: "Vận chuyển", t_bntt: "BN thanh toán", t_bhtt: "BH thanh toán",
-        t_ngoaids: "Ngoài DS", ma_khoa: "Mã khoa", nam_qt: "Năm QT",
-        thang_qt: "Tháng QT", ma_khuvuc: "Mã khu vực", ma_loaikcb: "Loại KCB",
-        ma_cskcb: "Mã CSKCB", noi_ttoan: "Nơi thanh toán", giam_dinh: "Giám định",
-        t_xuattoan: "Xuất toán", t_nguonkhac: "Nguồn khác",
-        t_datuyen: "Đa tuyến", t_vuottran: "Vượt trần",
-        is_normalized: "Chuẩn hóa", normalized_at: "Ngày chuẩn hóa",
-        ten_cskcb: "Tên CSKCB", khoa: "Khoa", ml2: "Nội/Ngoại trú", ml4: "Loại KCB",
-        ma_benh_chinh: "Mã bệnh chính", upload_timestamp: "Ngày tải lên",
-    };
+
 
     const RIGHT_ALIGN_COLS = new Set([
         "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
@@ -455,6 +501,7 @@ export default function TabManage() {
 
     /* ── Export Excel ── */
     const [showExportMenu, setShowExportMenu] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const exportMenuRef = useRef<HTMLDivElement>(null);
 
     // Close export menu on outside click
@@ -469,90 +516,49 @@ export default function TabManage() {
         return () => document.removeEventListener("mousedown", handler);
     }, [showExportMenu]);
 
-    /** Unwrap BigQuery wrapper objects */
-    const unwrapBQ = (val: unknown): unknown => {
-        if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
-            return (val as Record<string, unknown>).value;
-        }
-        return val;
-    };
-
-    /** Reverse ISO date "YYYY-MM-DD" → integer 19770902 */
-    const dateToInt = (val: unknown): number | unknown => {
-        if (val == null || val === "") return val;
-        const s = String(val).trim();
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (m) return Number(`${m[1]}${m[2]}${m[3]}`);
-        return val;
-    };
-
-    /** Reverse ISO datetime "YYYY-MM-DDThh:mm:ss" → "'YYYYMMDDHHmm" */
-    const datetimeToCompact = (val: unknown): string | unknown => {
-        if (val == null || val === "") return val;
-        const s = String(val).trim();
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-        if (m) return `'${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`;
-        return val;
-    };
-
-    const DATE_INT_COLS = new Set(["ngay_sinh", "gt_the_tu", "gt_the_den"]);
-    const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
-
-    /** Columns for the "full" export — SCHEMA + mapped columns in logical order */
-    const FULL_EXPORT_COLS: string[] = [
-        "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh", "dia_chi",
-        "ma_the", "ma_dkbd", "gt_the_tu", "gt_the_den",
-        "ma_benh", "ma_benh_chinh", "ma_benhkhac",
-        "ma_lydo_vvien", "ma_noi_chuyen", "ngay_vao", "ngay_ra", "so_ngay_dtri",
-        "ket_qua_dtri", "tinh_trang_rv",
-        "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
-        "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
-        "t_vchuyen", "t_bntt", "t_bhtt", "t_ngoaids",
-        "ma_khoa", "khoa", "nam_qt", "thang_qt", "ma_khuvuc",
-        "ma_loaikcb", "ml2", "ml4",
-        "ma_cskcb", "ten_cskcb",
-        "noi_ttoan", "giam_dinh",
-        "t_xuattoan", "t_nguonkhac", "t_datuyen", "t_vuottran",
-    ];
-
     const handleExportExcel = useCallback((mode: "raw" | "full") => {
         if (displayData.length === 0) return;
         setShowExportMenu(false);
+        setExporting(true);
 
-        if (mode === "raw") {
-            // Raw: SCHEMA_COLS order, original field names, reverse-transform dates
-            const exportData = displayData.map((row) => {
-                const out: Record<string, unknown> = {};
-                for (const col of SCHEMA_COLS) {
-                    let val = unwrapBQ(row[col]);
-                    if (DATE_INT_COLS.has(col)) val = dateToInt(val);
-                    else if (DATETIME_COLS.has(col)) val = datetimeToCompact(val);
-                    out[col] = val ?? "";
+        // Yield main thread so UI updates (show spinner) before heavy sync work
+        setTimeout(() => {
+            try {
+                if (mode === "raw") {
+                    const exportData = displayData.map((row) => {
+                        const out: Record<string, unknown> = {};
+                        for (const col of SCHEMA_COLS) {
+                            let val = unwrapBQ(row[col]);
+                            if (DATE_INT_COLS.has(col)) val = dateToInt(val);
+                            else if (DATETIME_COLS.has(col)) val = datetimeToCompact(val);
+                            out[col] = val ?? "";
+                        }
+                        return out;
+                    });
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Data");
+                    XLSX.writeFile(wb, `BHYT_Raw_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                } else {
+                    const exportData = displayData.map((row) => {
+                        const out: Record<string, unknown> = {};
+                        for (const col of FULL_EXPORT_COLS) {
+                            const label = COL_LABELS[col] || col;
+                            const val = unwrapBQ(row[col]);
+                            out[label] = val ?? "";
+                        }
+                        return out;
+                    });
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
+                    XLSX.writeFile(wb, `BHYT_DayDu_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 }
-                return out;
-            });
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Data");
-            XLSX.writeFile(wb, `BHYT_Raw_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        } else {
-            // Full: Vietnamese headers + mapped columns, human-readable values
-            const exportData = displayData.map((row) => {
-                const out: Record<string, unknown> = {};
-                for (const col of FULL_EXPORT_COLS) {
-                    const label = COL_LABELS[col] || col;
-                    let val = unwrapBQ(row[col]);
-                    // Keep dates as human-readable strings (ISO format)
-                    out[label] = val ?? "";
-                }
-                return out;
-            });
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
-            XLSX.writeFile(wb, `BHYT_DayDu_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        }
-    }, [displayData, fromYear, toYear, COL_LABELS]);
+            } finally {
+                setExporting(false);
+            }
+        }, 50);
+    }, [displayData, fromYear, toYear]);
 
     /* ── Metrics ── */
     const nMonths = actualMethod === "RAM" && data && data.length > 0
@@ -687,10 +693,14 @@ export default function TabManage() {
                             <button
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                                 onClick={() => setShowExportMenu((v) => !v)}
-                                disabled={displayData.length === 0}
+                                disabled={displayData.length === 0 || exporting}
                                 style={{ whiteSpace: "nowrap" }}
                             >
-                                📥 Tải Excel ({displayData.length.toLocaleString()}) ▾
+                                {exporting ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" /> Đang xuất…</>
+                                ) : (
+                                    <>📥 Tải Excel ({displayData.length.toLocaleString()}) ▾</>
+                                )}
                             </button>
                             {showExportMenu && (
                                 <div
