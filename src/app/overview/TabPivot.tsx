@@ -35,10 +35,17 @@ export default function TabPivot() {
     const [error, setError] = useState<string | null>(null);
     const [showDetail, setShowDetail] = useState(false);
 
-    // Load available years
+    // Safe JSON parser — handles Vercel HTML timeout responses
+    const safeJson = async (res: Response) => {
+        const text = await res.text();
+        try { return JSON.parse(text); }
+        catch { return { error: text.slice(0, 300) }; }
+    };
+
+    // Load available years (lightweight — no heavy queries)
     useEffect(() => {
         fetch("/api/bq/overview")
-            .then((r) => r.json())
+            .then((r) => safeJson(r))
             .then((d) => {
                 if (d.error) {
                     setError(d.error);
@@ -67,9 +74,9 @@ export default function TabPivot() {
             const res = await fetch("/api/bq/overview", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ year: selectedYear }),
+                body: JSON.stringify({ action: "pivot", year: selectedYear }),
             });
-            const d = await res.json();
+            const d = await safeJson(res);
             if (d.error) throw new Error(d.error);
             setRawData(d.data || []);
         } catch (e: unknown) {
