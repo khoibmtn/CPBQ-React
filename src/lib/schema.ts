@@ -31,6 +31,12 @@ export const SCHEMA_COLS = [
 /** Columns to exclude from user-facing data views */
 export const MANAGE_EXCLUDE_COLS = new Set(["source_file"]);
 
+/** Columns derived from lookup tables — read-only in edit mode */
+export const MAPPED_COLS = new Set(["ten_cskcb", "khoa", "ml2", "ml4", "ma_benh_chinh"]);
+
+/** Metadata columns — never editable */
+export const METADATA_COLS = new Set(["upload_timestamp", "is_normalized", "normalized_at", "source_file"]);
+
 /** Default columns for searching */
 export const DEFAULT_SEARCH_COLS = [
     "ho_ten", "ma_bn", "ma_the", "ma_benh", "ma_benhkhac",

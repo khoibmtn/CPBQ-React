@@ -143,8 +143,8 @@ export default function TabPivot() {
         return { pivotRows, ngoaiCskcb, noiCskcb, grandNgoai, grandNoi };
     };
 
-    const fmt = (v: number) =>
-        v === 0 ? "" : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
+    const fmt = (v: number | null | undefined) =>
+        !v ? "" : v.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
 
     const pivot = buildPivot();
 
@@ -434,10 +434,10 @@ export default function TabPivot() {
                                                 <td className="p-3">{r.ma_cskcb}</td>
                                                 <td className="p-3">{r.ten_cskcb || "–"}</td>
                                                 <td className="p-3 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                    {r.so_luot.toLocaleString()}
+                                                    {(r.so_luot ?? 0).toLocaleString()}
                                                 </td>
                                                 <td className="p-3 text-right pr-6" style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                    {r.tong_chi.toLocaleString("vi-VN", { maximumFractionDigits: 0 })}
+                                                    {(r.tong_chi ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 0 })}
                                                 </td>
                                             </tr>
                                         ))}

@@ -1002,9 +1002,19 @@ export default function TabImport() {
     };
 
     // Check unlock status from localStorage (shared with Settings page)
+    // Must use focus + storage + custom event listeners because TabGroup keep-alive prevents remount
     const [isUnlocked, setIsUnlocked] = useState(false);
     useEffect(() => {
-        setIsUnlocked(localStorage.getItem("settings_unlocked") === "true");
+        const check = () => setIsUnlocked(localStorage.getItem("settings_unlocked") === "true");
+        check();
+        window.addEventListener("focus", check);
+        window.addEventListener("storage", check);
+        window.addEventListener("settings-unlock-change", check);
+        return () => {
+            window.removeEventListener("focus", check);
+            window.removeEventListener("storage", check);
+            window.removeEventListener("settings-unlock-change", check);
+        };
     }, []);
 
     if (!isUnlocked) {

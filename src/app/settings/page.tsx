@@ -90,6 +90,9 @@ function PalettePicker() {
 
 export default function SettingsPage() {
     const [unlocked, setUnlocked] = useState(false);
+    const [showUnlockDialog, setShowUnlockDialog] = useState(false);
+    const [unlockInput, setUnlockInput] = useState("");
+    const [unlockError, setUnlockError] = useState(false);
 
     // Read localStorage on mount (client-only)
     useEffect(() => {
@@ -98,18 +101,26 @@ export default function SettingsPage() {
 
     const handleToggleLock = () => {
         if (unlocked) {
-            // Lock it
             localStorage.removeItem(STORAGE_KEY);
             setUnlocked(false);
+            window.dispatchEvent(new Event("settings-unlock-change"));
         } else {
-            // Prompt for code
-            const code = prompt("Nhập mã mở khóa:");
-            if (code === UNLOCK_CODE) {
-                localStorage.setItem(STORAGE_KEY, "true");
-                setUnlocked(true);
-            } else if (code !== null) {
-                alert("Sai mã mở khóa!");
-            }
+            setUnlockInput("");
+            setUnlockError(false);
+            setShowUnlockDialog(true);
+        }
+    };
+
+    const handleUnlockSubmit = () => {
+        if (unlockInput === UNLOCK_CODE) {
+            localStorage.setItem(STORAGE_KEY, "true");
+            setUnlocked(true);
+            setShowUnlockDialog(false);
+            setUnlockInput("");
+            setUnlockError(false);
+            window.dispatchEvent(new Event("settings-unlock-change"));
+        } else {
+            setUnlockError(true);
         }
     };
 
@@ -149,6 +160,59 @@ export default function SettingsPage() {
             />
 
             <TabGroup tabs={TABS} defaultTab="loaikcb" storageKey="settings_tab" panels={panels} />
+
+            {/* Unlock dialog */}
+            {showUnlockDialog && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+                    onClick={() => setShowUnlockDialog(false)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                            <Lock className="w-5 h-5 text-amber-600" />
+                            Mở khóa
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Nhập mã mở khóa để chỉnh sửa cấu hình
+                        </p>
+                        <input
+                            type="password"
+                            autoFocus
+                            value={unlockInput}
+                            onChange={(e) => { setUnlockInput(e.target.value); setUnlockError(false); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleUnlockSubmit(); }}
+                            placeholder="Mã mở khóa..."
+                            className={`w-full px-3 py-2 border rounded-lg text-sm outline-none transition-colors ${
+                                unlockError
+                                    ? "border-red-400 bg-red-50 focus:border-red-500"
+                                    : "border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                            }`}
+                        />
+                        {unlockError && (
+                            <p className="text-xs text-red-600 mt-1.5 font-medium">Sai mã mở khóa!</p>
+                        )}
+                        <div className="flex justify-end gap-2 mt-4">
+                            <button
+                                onClick={() => setShowUnlockDialog(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleUnlockSubmit}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer"
+                            >
+                                Xác nhận
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }
+

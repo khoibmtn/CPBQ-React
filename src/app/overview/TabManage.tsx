@@ -1,9 +1,22 @@
 "use client";
 import React from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Pencil } from "lucide-react";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
+
+/** Safe JSON parse — converts Vercel HTML error pages to readable messages */
+async function safeJson(res: Response) {
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        if (text.trimStart().startsWith("<")) {
+            throw new Error("Server quá tải hoặc timeout. Vui lòng thử lại.");
+        }
+        throw new Error(text.slice(0, 200));
+    }
+}
 import { SCHEMA_COLS } from "@/lib/schema";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
@@ -11,6 +24,7 @@ import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import SearchBuilder, { SearchCondition } from "@/components/ui/SearchBuilder";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import EditRecordModal from "./EditRecordModal";
 import * as XLSX from "xlsx";
 
 export default function TabManage() {
@@ -46,16 +60,33 @@ export default function TabManage() {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
+    // Edit
+    const [editRow, setEditRow] = useState<Record<string, unknown> | null>(null);
+    const [editRowIdx, setEditRowIdx] = useState<number>(-1);
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
+    const [editMsg, setEditMsg] = useState<string | null>(null);
+
     // Check unlock status from localStorage (shared with Settings page)
+    // Must use focus + storage + custom event listeners because TabGroup keep-alive prevents remount
     const [isUnlocked, setIsUnlocked] = useState(false);
     useEffect(() => {
-        setIsUnlocked(localStorage.getItem("settings_unlocked") === "true");
+        const check = () => setIsUnlocked(localStorage.getItem("settings_unlocked") === "true");
+        check();
+        window.addEventListener("focus", check);
+        window.addEventListener("storage", check);
+        window.addEventListener("settings-unlock-change", check);
+        return () => {
+            window.removeEventListener("focus", check);
+            window.removeEventListener("storage", check);
+            window.removeEventListener("settings-unlock-change", check);
+        };
     }, []);
 
     /* ── Load initial metadata ── */
     useEffect(() => {
         fetch("/api/bq/overview/manage")
-            .then((r) => r.json())
+            .then((r) => safeJson(r))
             .then((d) => {
                 if (d.error) {
                     setError(d.error);
@@ -113,7 +144,7 @@ export default function TabManage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "load", fromYear, toYear }),
                 });
-                const d = await res.json();
+                const d = await safeJson(res);
                 if (d.error) throw new Error(d.error);
                 const loadedData: Record<string, unknown>[] = d.data || [];
                 setData(loadedData);
@@ -135,7 +166,7 @@ export default function TabManage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "count", fromYear, toYear }),
                 });
-                const d = await res.json();
+                const d = await safeJson(res);
                 if (d.error) throw new Error(d.error);
                 setData([]); // Empty array to indicate "loaded but no local data"
                 setTotalRows(d.total || 0);
@@ -202,7 +233,7 @@ export default function TabManage() {
                         toYear,
                     }),
                 });
-                const d = await res.json();
+                const d = await safeJson(res);
                 if (d.error) throw new Error(d.error);
                 setDisplayData(d.data || []);
                 setIsSearching(true);
@@ -238,7 +269,7 @@ export default function TabManage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ rows: rowsToDelete }),
             });
-            const d = await res.json();
+            const d = await safeJson(res);
             if (d.error) throw new Error(d.error);
             if (d.errors && d.errors.length > 0) {
                 setError(`Lỗi khi xóa: ${d.errors.join("; ")}`);
@@ -265,7 +296,7 @@ export default function TabManage() {
                             toYear,
                         }),
                     });
-                    const sd = await searchRes.json();
+                    const sd = await safeJson(searchRes);
                     if (!sd.error) {
                         setDisplayData(sd.data || []);
                     }
@@ -287,6 +318,70 @@ export default function TabManage() {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
             setDeleteLoading(false);
+        }
+    };
+
+    /* ── Edit ── */
+    const handleRowClick = useCallback((globalIdx: number, row: Record<string, unknown>) => {
+        setEditRow(row);
+        setEditRowIdx(globalIdx);
+        setEditModalOpen(true);
+        setEditMsg(null);
+    }, []);
+
+    const handleEditSave = async (originalRow: Record<string, unknown>, updatedFields: Record<string, unknown>) => {
+        setEditLoading(true);
+        setError(null);
+        setEditMsg(null);
+
+        try {
+            const res = await fetch("/api/bq/overview/manage", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ originalRow, updatedFields }),
+            });
+            const d = await safeJson(res);
+            if (d.error) throw new Error(d.error);
+
+            if (d.updatedCount === 0) {
+                setError("Không tìm thấy hồ sơ để cập nhật. Có thể dữ liệu đã thay đổi.");
+                return;
+            }
+
+            // Update local data
+            const newDisplayData = [...displayData];
+            if (editRowIdx >= 0 && editRowIdx < newDisplayData.length) {
+                const updated = { ...newDisplayData[editRowIdx] };
+                for (const [k, v] of Object.entries(updatedFields)) {
+                    updated[k] = v;
+                }
+                newDisplayData[editRowIdx] = updated;
+                setDisplayData(newDisplayData);
+
+                // Also update in full data array if RAM mode
+                if (data) {
+                    const newData = [...data];
+                    const origStr = JSON.stringify(displayData[editRowIdx]);
+                    const dataIdx = newData.findIndex((r) => JSON.stringify(r) === origStr);
+                    if (dataIdx >= 0) {
+                        const updatedRow = { ...newData[dataIdx] };
+                        for (const [k, v] of Object.entries(updatedFields)) {
+                            updatedRow[k] = v;
+                        }
+                        newData[dataIdx] = updatedRow;
+                        setData(newData);
+                    }
+                }
+            }
+
+            setEditMsg(`✅ Đã cập nhật ${d.updatedCount} hồ sơ!`);
+            setEditModalOpen(false);
+            setEditRow(null);
+            setDeleteMsg(`✅ Đã cập nhật hồ sơ thành công!`);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Unknown error");
+        } finally {
+            setEditLoading(false);
         }
     };
 
@@ -597,6 +692,7 @@ export default function TabManage() {
                             selectable={isUnlocked}
                             selectedRows={selectedRows}
                             onSelectionChange={setSelectedRows}
+                            onRowClick={isUnlocked ? handleRowClick : undefined}
                             stickyHeader
                             rowClassName={getRowClassName}
                         />
@@ -620,6 +716,15 @@ export default function TabManage() {
                         variant="danger"
                         onConfirm={handleDelete}
                         onCancel={() => setShowDeleteConfirm(false)}
+                    />
+
+                    {/* Edit record modal */}
+                    <EditRecordModal
+                        open={editModalOpen}
+                        row={editRow}
+                        onClose={() => { setEditModalOpen(false); setEditRow(null); }}
+                        onSave={handleEditSave}
+                        loading={editLoading}
                     />
                 </>
             )}

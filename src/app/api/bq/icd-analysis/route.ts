@@ -7,6 +7,7 @@ import { PROJECT_ID, DATASET_ID, VIEW_ID } from "@/lib/config";
  * Returns: availableYearMonths
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
     try {

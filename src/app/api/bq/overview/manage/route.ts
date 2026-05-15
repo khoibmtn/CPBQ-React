@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { runQuery, getBqClient } from "@/lib/bigquery";
 import { PROJECT_ID, DATASET_ID, VIEW_ID, FULL_TABLE_ID } from "@/lib/config";
-import { MANAGE_EXCLUDE_COLS } from "@/lib/schema";
+import { MANAGE_EXCLUDE_COLS, SCHEMA_COLS, MAPPED_COLS, METADATA_COLS } from "@/lib/schema";
 
 /**
  * GET /api/bq/overview/manage
  * Returns column list from the view (for search builder)
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
     try {
@@ -261,6 +262,111 @@ export async function DELETE(request: Request) {
         });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : "Unknown error";
+        return NextResponse.json({ error: msg }, { status: 500 });
+    }
+}
+
+/**
+ * PUT /api/bq/overview/manage
+ * Body: { originalRow: Record<string, unknown>, updatedFields: Record<string, unknown> }
+ * Updates a single row by composite key
+ */
+export async function PUT(request: Request) {
+    try {
+        const body = await request.json();
+        const { originalRow, updatedFields } = body as {
+            originalRow: Record<string, unknown>;
+            updatedFields: Record<string, unknown>;
+        };
+
+        if (!originalRow || !updatedFields || Object.keys(updatedFields).length === 0) {
+            return NextResponse.json({ error: "Không có thay đổi nào." }, { status: 400 });
+        }
+
+        // Only allow updating SCHEMA_COLS (not mapped/metadata)
+        const schemaSet = new Set<string>(SCHEMA_COLS);
+        const forbiddenCols = Object.keys(updatedFields).filter(
+            (c) => !schemaSet.has(c) || MAPPED_COLS.has(c) || METADATA_COLS.has(c)
+        );
+        if (forbiddenCols.length > 0) {
+            return NextResponse.json(
+                { error: `Không được sửa cột: ${forbiddenCols.join(", ")}` },
+                { status: 400 }
+            );
+        }
+
+        const ROW_KEY_COLS = ["ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra"];
+        const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
+
+        // Build WHERE clause to identify the exact row
+        const conditions: string[] = [];
+        for (const col of ROW_KEY_COLS) {
+            let val = originalRow[col];
+            if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
+                val = (val as Record<string, unknown>).value;
+            }
+            if (val === null || val === undefined) {
+                conditions.push(`${col} IS NULL`);
+            } else if (typeof val === "number") {
+                conditions.push(`${col} = ${val}`);
+            } else if (DATETIME_COLS.has(col)) {
+                const safeVal = String(val).replace(/'/g, "\\'");
+                conditions.push(`${col} = DATETIME('${safeVal}')`);
+            } else {
+                const safeVal = String(val).replace(/'/g, "\\'");
+                conditions.push(`${col} = '${safeVal}'`);
+            }
+        }
+
+        // Also match on upload_timestamp for exact row identification
+        let ts = originalRow["upload_timestamp"];
+        if (ts != null && typeof ts === "object" && "value" in (ts as Record<string, unknown>)) {
+            ts = (ts as Record<string, unknown>).value;
+        }
+        if (ts != null) {
+            const safeTs = String(ts).replace(/'/g, "\\'");
+            conditions.push(`upload_timestamp = TIMESTAMP('${safeTs}')`);
+        }
+
+        // Build SET clause
+        const setClauses: string[] = [];
+        for (const [col, val] of Object.entries(updatedFields)) {
+            if (val === null || val === undefined || val === "") {
+                setClauses.push(`${col} = NULL`);
+            } else if (typeof val === "number") {
+                setClauses.push(`${col} = ${val}`);
+            } else if (DATETIME_COLS.has(col)) {
+                const safeVal = String(val).replace(/'/g, "\\'");
+                setClauses.push(`${col} = DATETIME('${safeVal}')`);
+            } else {
+                const safeVal = String(val).replace(/'/g, "\\'");
+                setClauses.push(`${col} = '${safeVal}'`);
+            }
+        }
+
+        const updateQuery = `
+            UPDATE \`${FULL_TABLE_ID}\`
+            SET ${setClauses.join(", ")}
+            WHERE ${conditions.join(" AND ")}
+        `;
+
+        console.log("[UPDATE] Query:", updateQuery);
+
+        const client = getBqClient();
+        const [job] = await client.createQueryJob({ query: updateQuery });
+        await job.getQueryResults();
+        const [meta] = await job.getMetadata();
+        const affected = Number(meta?.statistics?.query?.numDmlAffectedRows) || 0;
+
+        return NextResponse.json({ updatedCount: affected });
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        if (msg.includes("streaming buffer")) {
+            return NextResponse.json(
+                { error: "Dữ liệu vừa import chưa thể sửa ngay. Vui lòng đợi 30 phút và thử lại." },
+                { status: 409 }
+            );
+        }
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }

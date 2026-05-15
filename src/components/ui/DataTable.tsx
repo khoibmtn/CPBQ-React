@@ -20,6 +20,7 @@ interface DataTableProps {
     selectedRows?: Set<number>;
     disabledRows?: Set<number>;
     onSelectionChange?: (selected: Set<number>) => void;
+    onRowClick?: (globalIdx: number, row: Record<string, unknown>) => void;
     emptyMessage?: string;
     stickyHeader?: boolean;
     rowClassName?: (globalIdx: number) => string;
@@ -36,6 +37,7 @@ export default function DataTable({
     selectedRows,
     disabledRows,
     onSelectionChange,
+    onRowClick,
     emptyMessage = "Không có dữ liệu",
     stickyHeader = false,
     rowClassName,
@@ -232,7 +234,9 @@ export default function DataTable({
                                         ${isSelected ? "row-selected" : ""}
                                         ${extraClass}
                                         hover:bg-gray-50 transition-colors
+                                        ${onRowClick ? "cursor-pointer" : ""}
                                     `}
+                                    onClick={() => onRowClick?.(globalIdx, row)}
                                 >
                                     {selectable && (
                                         <td className="text-center border border-gray-100 px-2 py-1.5">
