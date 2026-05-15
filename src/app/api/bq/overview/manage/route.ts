@@ -5,34 +5,17 @@ import { MANAGE_EXCLUDE_COLS, SCHEMA_COLS, MAPPED_COLS, METADATA_COLS } from "@/
 
 /**
  * GET /api/bq/overview/manage
- * Returns column list from the view (for search builder)
+ * Returns column list + available years
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET() {
     try {
-        const query = `SELECT * FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\` LIMIT 0`;
-        const client = getBqClient();
-        const [job] = await client.createQueryJob({ query });
-        const [rows] = await job.getQueryResults();
+        // Derive columns from schema constant — no BQ query needed
+        const columns = SCHEMA_COLS.filter((c) => !MANAGE_EXCLUDE_COLS.has(c));
 
-        // Get column names from metadata
-        const metadata = job.metadata?.configuration?.query;
-        let columns: string[] = [];
-
-        if (rows.length === 0) {
-            // Use schema from job metadata
-            const [, , response] = await job.getQueryResults({ maxResults: 0 });
-            const schema = response?.schema?.fields;
-            if (schema) {
-                columns = schema
-                    .map((f: { name?: string }) => f.name || "")
-                    .filter((c: string) => c && !MANAGE_EXCLUDE_COLS.has(c));
-            }
-        }
-
-        // Count by year range
+        // Single lightweight query for available years
         const yearsQuery = `
             SELECT DISTINCT nam_qt
             FROM \`${FULL_TABLE_ID}\`
