@@ -4,23 +4,14 @@ import { PROJECT_ID, DATASET_ID, VIEW_ID, FULL_TABLE_ID } from "@/lib/config";
 
 /**
  * GET /api/bq/overview
- * Returns: { years: number[], summary: {...}[] }
+ * Returns: { years: number[], summary: {...}[], total: number }
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET() {
     try {
-        // Get available years
-        const yearsQuery = `
-            SELECT DISTINCT nam_qt
-            FROM \`${FULL_TABLE_ID}\`
-            ORDER BY nam_qt DESC
-        `;
-        const yearsRows = await runQuery<{ nam_qt: number }>(yearsQuery);
-        const years = yearsRows.map((r) => r.nam_qt);
-
-        // Get data summary (row counts by year/month/CSKCB)
+        // Single query that returns all needed data: summary + years + total
         const summaryQuery = `
             SELECT
                 nam_qt,
@@ -37,10 +28,15 @@ export async function GET() {
         `;
         const summary = await runQuery(summaryQuery);
 
-        // Total row count
-        const totalQuery = `SELECT COUNT(*) AS total FROM \`${FULL_TABLE_ID}\``;
-        const totalRows = await runQuery<{ total: number }>(totalQuery);
-        const total = totalRows[0]?.total ?? 0;
+        // Derive years + total from summary data — no extra queries
+        const yearsSet = new Set<number>();
+        let total = 0;
+        for (const row of summary) {
+            const r = row as Record<string, unknown>;
+            yearsSet.add(Number(r.nam_qt));
+            total += Number(r.so_dong) || 0;
+        }
+        const years = [...yearsSet].sort((a, b) => b - a);
 
         return NextResponse.json({ years, summary, total });
     } catch (error: unknown) {
