@@ -454,56 +454,105 @@ export default function TabManage() {
     };
 
     /* ── Export Excel ── */
-    const handleExportExcel = useCallback(() => {
-        if (displayData.length === 0) return;
+    const [showExportMenu, setShowExportMenu] = useState(false);
+    const exportMenuRef = useRef<HTMLDivElement>(null);
 
-        /** Reverse ISO date "YYYY-MM-DD" → integer 19770902 */
-        const dateToInt = (val: unknown): number | unknown => {
-            if (val == null || val === "") return val;
-            const s = String(val).trim();
-            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            if (m) return Number(`${m[1]}${m[2]}${m[3]}`);
-            return val;
-        };
-
-        /** Reverse ISO datetime "YYYY-MM-DDThh:mm:ss" → "'YYYYMMDDHHmm" */
-        const datetimeToCompact = (val: unknown): string | unknown => {
-            if (val == null || val === "") return val;
-            const s = String(val).trim();
-            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-            if (m) return `'${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`;
-            return val;
-        };
-
-        const DATE_INT_COLS = new Set(["ngay_sinh", "gt_the_tu", "gt_the_den"]);
-        const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
-
-        // Unwrap BQ objects, enforce SCHEMA_COLS order, reverse-transform dates
-        const exportData = displayData.map((row) => {
-            const out: Record<string, unknown> = {};
-            for (const col of SCHEMA_COLS) {
-                let val = row[col];
-                // Unwrap BigQuery wrapper objects
-                if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
-                    val = (val as Record<string, unknown>).value;
-                }
-                // Reverse-transform dates to original format
-                if (DATE_INT_COLS.has(col)) {
-                    val = dateToInt(val);
-                } else if (DATETIME_COLS.has(col)) {
-                    val = datetimeToCompact(val);
-                }
-                out[col] = val ?? "";
+    // Close export menu on outside click
+    useEffect(() => {
+        if (!showExportMenu) return;
+        const handler = (e: MouseEvent) => {
+            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+                setShowExportMenu(false);
             }
-            return out;
-        });
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showExportMenu]);
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Data");
-        const fileName = `BHYT_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-        XLSX.writeFile(wb, fileName);
-    }, [displayData, fromYear, toYear]);
+    /** Unwrap BigQuery wrapper objects */
+    const unwrapBQ = (val: unknown): unknown => {
+        if (val != null && typeof val === "object" && "value" in (val as Record<string, unknown>)) {
+            return (val as Record<string, unknown>).value;
+        }
+        return val;
+    };
+
+    /** Reverse ISO date "YYYY-MM-DD" → integer 19770902 */
+    const dateToInt = (val: unknown): number | unknown => {
+        if (val == null || val === "") return val;
+        const s = String(val).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) return Number(`${m[1]}${m[2]}${m[3]}`);
+        return val;
+    };
+
+    /** Reverse ISO datetime "YYYY-MM-DDThh:mm:ss" → "'YYYYMMDDHHmm" */
+    const datetimeToCompact = (val: unknown): string | unknown => {
+        if (val == null || val === "") return val;
+        const s = String(val).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        if (m) return `'${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}`;
+        return val;
+    };
+
+    const DATE_INT_COLS = new Set(["ngay_sinh", "gt_the_tu", "gt_the_den"]);
+    const DATETIME_COLS = new Set(["ngay_vao", "ngay_ra"]);
+
+    /** Columns for the "full" export — SCHEMA + mapped columns in logical order */
+    const FULL_EXPORT_COLS: string[] = [
+        "stt", "ma_bn", "ho_ten", "ngay_sinh", "gioi_tinh", "dia_chi",
+        "ma_the", "ma_dkbd", "gt_the_tu", "gt_the_den",
+        "ma_benh", "ma_benh_chinh", "ma_benhkhac",
+        "ma_lydo_vvien", "ma_noi_chuyen", "ngay_vao", "ngay_ra", "so_ngay_dtri",
+        "ket_qua_dtri", "tinh_trang_rv",
+        "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
+        "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
+        "t_vchuyen", "t_bntt", "t_bhtt", "t_ngoaids",
+        "ma_khoa", "khoa", "nam_qt", "thang_qt", "ma_khuvuc",
+        "ma_loaikcb", "ml2", "ml4",
+        "ma_cskcb", "ten_cskcb",
+        "noi_ttoan", "giam_dinh",
+        "t_xuattoan", "t_nguonkhac", "t_datuyen", "t_vuottran",
+    ];
+
+    const handleExportExcel = useCallback((mode: "raw" | "full") => {
+        if (displayData.length === 0) return;
+        setShowExportMenu(false);
+
+        if (mode === "raw") {
+            // Raw: SCHEMA_COLS order, original field names, reverse-transform dates
+            const exportData = displayData.map((row) => {
+                const out: Record<string, unknown> = {};
+                for (const col of SCHEMA_COLS) {
+                    let val = unwrapBQ(row[col]);
+                    if (DATE_INT_COLS.has(col)) val = dateToInt(val);
+                    else if (DATETIME_COLS.has(col)) val = datetimeToCompact(val);
+                    out[col] = val ?? "";
+                }
+                return out;
+            });
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+            XLSX.writeFile(wb, `BHYT_Raw_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } else {
+            // Full: Vietnamese headers + mapped columns, human-readable values
+            const exportData = displayData.map((row) => {
+                const out: Record<string, unknown> = {};
+                for (const col of FULL_EXPORT_COLS) {
+                    const label = COL_LABELS[col] || col;
+                    let val = unwrapBQ(row[col]);
+                    // Keep dates as human-readable strings (ISO format)
+                    out[label] = val ?? "";
+                }
+                return out;
+            });
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
+            XLSX.writeFile(wb, `BHYT_DayDu_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+    }, [displayData, fromYear, toYear, COL_LABELS]);
 
     /* ── Metrics ── */
     const nMonths = actualMethod === "RAM" && data && data.length > 0
@@ -634,14 +683,43 @@ export default function TabManage() {
                     {/* Search */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <SectionTitle icon="🔍">Dữ liệu chi tiết</SectionTitle>
-                        <button
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
-                            onClick={handleExportExcel}
-                            disabled={displayData.length === 0}
-                            style={{ whiteSpace: "nowrap" }}
-                        >
-                            📥 Tải Excel ({displayData.length.toLocaleString()})
-                        </button>
+                        <div ref={exportMenuRef} style={{ position: "relative" }}>
+                            <button
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                                onClick={() => setShowExportMenu((v) => !v)}
+                                disabled={displayData.length === 0}
+                                style={{ whiteSpace: "nowrap" }}
+                            >
+                                📥 Tải Excel ({displayData.length.toLocaleString()}) ▾
+                            </button>
+                            {showExportMenu && (
+                                <div
+                                    style={{
+                                        position: "absolute", right: 0, top: "100%", marginTop: 4,
+                                        background: "white", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,.12)",
+                                        border: "1px solid #e5e7eb", zIndex: 50, minWidth: 220, overflow: "hidden",
+                                    }}
+                                >
+                                    <button
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors cursor-pointer"
+                                        onClick={() => handleExportExcel("raw")}
+                                    >
+                                        <span className="font-medium">📄 Xuất Raw</span>
+                                        <br />
+                                        <span className="text-xs text-gray-500">Tên cột gốc, đúng schema BigQuery</span>
+                                    </button>
+                                    <hr className="border-gray-100" />
+                                    <button
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors cursor-pointer"
+                                        onClick={() => handleExportExcel("full")}
+                                    >
+                                        <span className="font-medium">📊 Xuất đầy đủ</span>
+                                        <br />
+                                        <span className="text-xs text-gray-500">Tên tiếng Việt, có Khoa, CSKCB, Nội/Ngoại trú…</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <SearchBuilder
