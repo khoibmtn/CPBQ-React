@@ -548,32 +548,33 @@ export default function TabManage() {
         // Yield main thread so UI updates (show spinner) before heavy sync work
         setTimeout(() => {
             try {
+                // CRITICAL: Use { dense: true } to store cells in ws["!data"][r][c]
+                // instead of ws["A1"], ws["B2"]... which creates 2.6M+ object properties
+                // and triggers V8 RangeError "Too many properties to enumerate"
                 if (mode === "raw") {
-                    const exportData = displayData.map((row) => {
-                        const out: Record<string, unknown> = {};
-                        for (const col of SCHEMA_COLS) {
+                    const headers = [...SCHEMA_COLS];
+                    const aoa: unknown[][] = [headers];
+                    for (let i = 0; i < displayData.length; i++) {
+                        const row = displayData[i];
+                        aoa.push(SCHEMA_COLS.map((col) => {
                             let val = unwrapBQ(row[col]);
                             if (DATE_INT_COLS.has(col)) val = dateToInt(val);
                             else if (DATETIME_COLS.has(col)) val = datetimeToCompact(val);
-                            out[col] = val ?? "";
-                        }
-                        return out;
-                    });
-                    const ws = XLSX.utils.json_to_sheet(exportData);
+                            return val ?? "";
+                        }));
+                    }
+                    const ws = XLSX.utils.aoa_to_sheet(aoa, { dense: true } as XLSX.AOA2SheetOpts);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Data");
                     XLSX.writeFile(wb, `BHYT_Raw_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 } else {
-                    const exportData = displayData.map((row) => {
-                        const out: Record<string, unknown> = {};
-                        for (const col of FULL_EXPORT_COLS) {
-                            const label = COL_LABELS[col] || col;
-                            const val = unwrapBQ(row[col]);
-                            out[label] = val ?? "";
-                        }
-                        return out;
-                    });
-                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const headers = FULL_EXPORT_COLS.map((col) => COL_LABELS[col] || col);
+                    const aoa: unknown[][] = [headers];
+                    for (let i = 0; i < displayData.length; i++) {
+                        const row = displayData[i];
+                        aoa.push(FULL_EXPORT_COLS.map((col) => unwrapBQ(row[col]) ?? ""));
+                    }
+                    const ws = XLSX.utils.aoa_to_sheet(aoa, { dense: true } as XLSX.AOA2SheetOpts);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Dữ liệu");
                     XLSX.writeFile(wb, `BHYT_DayDu_${fromYear}-${toYear}_${new Date().toISOString().slice(0, 10)}.xlsx`);

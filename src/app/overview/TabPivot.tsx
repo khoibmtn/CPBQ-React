@@ -91,10 +91,18 @@ export default function TabPivot() {
         }
     }, [selectedYear]);
 
-    // Auto-fetch only if we don't already have cached data for this year
+    // Track if user explicitly changed year (vs initial mount)
+    const [userChangedYear, setUserChangedYear] = useState(false);
+
+    // Only auto-fetch when user explicitly picks a different year
+    // On mount: use cached rawData from sessionStorage (no BQ call)
+    // This prevents heavy POST pivot from firing on page load → no Vercel timeout
     useEffect(() => {
-        if (selectedYear && rawData.length === 0) fetchPivot();
-    }, [selectedYear]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (userChangedYear && selectedYear) {
+            fetchPivot();
+            setUserChangedYear(false);
+        }
+    }, [selectedYear, userChangedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ── Build pivot ── */
 
@@ -191,7 +199,7 @@ export default function TabPivot() {
                         <select
                             className="bg-transparent border-none text-sm font-semibold py-0 pl-0 pr-8 focus:ring-0 cursor-pointer"
                             value={selectedYear ?? ""}
-                            onChange={(e) => setSelectedYear(+e.target.value)}
+                            onChange={(e) => { setSelectedYear(+e.target.value); setUserChangedYear(true); }}
                         >
                             {years.map((y) => (
                                 <option key={y} value={y}>{y}</option>
@@ -213,6 +221,19 @@ export default function TabPivot() {
                     </div>
                 </div>
             </section>
+
+            {/* Prompt when no data yet — first visit or cache cleared */}
+            {!loading && rawData.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-8">
+                    <button
+                        className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer"
+                        onClick={() => { setUserChangedYear(true); }}
+                    >
+                        <Search className="w-4 h-4" /> Tải dữ liệu
+                    </button>
+                    <InfoBanner type="info">Chọn năm quyết toán và bấm <b>Tải dữ liệu</b> để hiển thị.</InfoBanner>
+                </div>
+            )}
 
             {loading && (
                 <div className="flex items-center gap-2 justify-center py-12 text-gray-500 text-sm">
