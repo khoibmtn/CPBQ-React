@@ -17,7 +17,7 @@ async function safeJson(res: Response) {
         throw new Error(text.slice(0, 200));
     }
 }
-import { SCHEMA_COLS } from "@/lib/schema";
+import { SCHEMA_COLS, MANAGE_EXCLUDE_COLS } from "@/lib/schema";
 import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
@@ -150,60 +150,35 @@ export default function TabManage() {
         };
     }, []);
 
-    /* ── Load initial metadata ── */
+    /* ── Initialize metadata from client-side constants (NO API calls) ── */
     useEffect(() => {
-        // Skip if years already cached from sessionStorage
-        if (years.length > 0 && columns.length > 0) {
-            setInitialLoading(false);
-            return;
+        // Columns: derive from schema constants — same logic as server
+        if (columns.length === 0) {
+            const cols = SCHEMA_COLS.filter((c) => !MANAGE_EXCLUDE_COLS.has(c));
+            setColumns(cols);
         }
 
-        let cancelled = false;
-
-        const loadMeta = async () => {
-            try {
-                // Fetch columns (static, no BQ query — instant)
-                const colRes = await fetch("/api/bq/overview/manage");
-                const colData = await safeJson(colRes);
-                if (cancelled) return;
-                if (colData.columns) setColumns(colData.columns);
-
-                // Fetch years from shared endpoint (same as TabPivot — avoids duplicate BQ calls)
-                if (years.length === 0) {
-                    const yrsRes = await fetch("/api/bq/overview");
-                    const yrsData = await safeJson(yrsRes);
-                    if (cancelled) return;
-                    if (yrsData.error) {
-                        setError(yrsData.error);
-                        setInitialLoading(false);
-                        return;
-                    }
-                    const yrs: number[] = yrsData.years || [];
-                    setYears(yrs);
-                    if (yrs.length > 0 && fromYear === 0) {
-                        const currentYear = new Date().getFullYear();
-                        const bestYear = yrs.includes(currentYear) ? currentYear : yrs[0];
-                        setFromYear(bestYear);
-                        setToYear(bestYear);
-                    }
-                }
-
-                // Set default search field
-                const cols = columns.length > 0 ? columns : (colData.columns || []);
-                if (cols.length > 0 && !conditions[0].field) {
-                    setConditions([{ field: cols[0], keyword: "", operator: "AND" }]);
-                }
-                setInitialLoading(false);
-            } catch (e) {
-                if (!cancelled) {
-                    setError(e instanceof Error ? e.message : String(e));
-                    setInitialLoading(false);
-                }
+        // Years: generate range from 2023 to current year
+        if (years.length === 0) {
+            const currentYear = new Date().getFullYear();
+            const yrs: number[] = [];
+            for (let y = currentYear; y >= 2023; y--) yrs.push(y);
+            setYears(yrs);
+            if (fromYear === 0) {
+                const bestYear = yrs.includes(currentYear) ? currentYear : yrs[0];
+                setFromYear(bestYear);
+                setToYear(bestYear);
             }
-        };
+        }
 
-        loadMeta();
-        return () => { cancelled = true; };
+        // Set default search field
+        const cols = columns.length > 0
+            ? columns
+            : SCHEMA_COLS.filter((c) => !MANAGE_EXCLUDE_COLS.has(c));
+        if (cols.length > 0 && !conditions[0].field) {
+            setConditions([{ field: cols[0], keyword: "", operator: "AND" }]);
+        }
+        setInitialLoading(false);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     /* ── Determine actual method ── */

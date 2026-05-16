@@ -42,32 +42,18 @@ export default function TabPivot() {
         catch { return { error: text.slice(0, 300) }; }
     };
 
-    // Load available years (lightweight — no heavy queries)
-    // Skip if already cached from sessionStorage
+    // Generate available years client-side (NO API call — instant, no timeout risk)
     useEffect(() => {
         if (years.length > 0) {
             setInitialLoading(false);
             return;
         }
-        fetch("/api/bq/overview")
-            .then((r) => safeJson(r))
-            .then((d) => {
-                if (d.error) {
-                    setError(d.error);
-                    setInitialLoading(false);
-                    return;
-                }
-                const yrs: number[] = d.years || [];
-                setYears(yrs);
-                if (yrs.length > 0 && !selectedYear) {
-                    setSelectedYear(yrs[0]);
-                }
-                setInitialLoading(false);
-            })
-            .catch((e) => {
-                setError(e.message);
-                setInitialLoading(false);
-            });
+        const currentYear = new Date().getFullYear();
+        const yrs: number[] = [];
+        for (let y = currentYear; y >= 2023; y--) yrs.push(y);
+        setYears(yrs);
+        if (!selectedYear) setSelectedYear(yrs[0]);
+        setInitialLoading(false);
     }, []);
 
     // Fetch pivot data when year changes
