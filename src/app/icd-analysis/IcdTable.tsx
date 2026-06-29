@@ -99,7 +99,7 @@ function computeCategoryValue(
     field: string,
     mode: CostCategoryMode
 ): number {
-    const rawVal = (row as Record<string, number>)[field] || 0;
+    const rawVal = (row as unknown as Record<string, number>)[field] || 0;
     if (mode === "amount") return rawVal;
     if (mode === "average") return row.so_luot ? rawVal / row.so_luot : 0;
     // ratio: field / t_tongchi (only for t_thuoc)
