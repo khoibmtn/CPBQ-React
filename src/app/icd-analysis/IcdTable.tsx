@@ -446,7 +446,7 @@ function TotalRow({
                 // Compute category totals for this period
                 const catTotals: Record<string, number> = {};
                 for (const cat of costCategories) {
-                    const rawSum = pd.data.reduce((s, r) => s + ((r as Record<string, number>)[cat.field] || 0), 0);
+                    const rawSum = pd.data.reduce((s, r) => s + ((r as unknown as Record<string, number>)[cat.field] || 0), 0);
                     if (cat.mode === "amount") catTotals[cat.field] = rawSum;
                     else if (cat.mode === "average") catTotals[cat.field] = t.so_luot ? rawSum / t.so_luot : 0;
                     else catTotals[cat.field] = t.t_tongchi ? (rawSum / t.t_tongchi) * 100 : 0;
