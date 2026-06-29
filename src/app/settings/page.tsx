@@ -5,9 +5,10 @@ import TabGroup from "@/components/ui/TabGroup";
 import LookupEditor from "@/components/settings/LookupEditor";
 import ProfileManager from "@/components/settings/ProfileManager";
 import MergeManager from "@/components/settings/MergeManager";
-import { Settings, ClipboardList, Building2, Building, BarChart3, GitMerge, Palette, Lock, LockOpen } from "lucide-react";
+import { Settings, ClipboardList, Building2, Building, BarChart3, GitMerge, Palette, Lock, LockOpen, BookOpen } from "lucide-react";
 import { usePalette, PALETTES, type PaletteKey } from "@/components/ThemeProvider";
 import { useState, useEffect, useMemo } from "react";
+import Icd10Browser from "@/components/settings/Icd10Browser";
 
 const STORAGE_KEY = "settings_unlocked";
 const UNLOCK_CODE = "123456";
@@ -18,6 +19,7 @@ const TABS = [
     { id: "khoa", label: "Khoa", icon: Building },
     { id: "profiles", label: "Profiles", icon: BarChart3 },
     { id: "merge", label: "Gộp khoa", icon: GitMerge },
+    { id: "icd10", label: "ICD 10", icon: BookOpen },
     { id: "palette", label: "Giao diện", icon: Palette },
 ];
 
@@ -133,6 +135,7 @@ export default function SettingsPage() {
         khoa: <LookupEditor tableName="lookup_khoa" columns={KHOA_COLUMNS} readOnly={readOnly} />,
         profiles: <ProfileManager readOnly={readOnly} />,
         merge: <MergeManager readOnly={readOnly} />,
+        icd10: <Icd10Browser />,
         palette: <PalettePicker />,
     }), [readOnly]);
 

@@ -7,8 +7,10 @@ import InfoBanner from "@/components/ui/InfoBanner";
 import SectionTitle from "@/components/ui/SectionTitle";
 import PeriodSelector, { PeriodDef } from "@/components/ui/PeriodSelector";
 import IcdTable, { IcdRow, IcdPeriodData, CostType, DiffMetric } from "./IcdTable";
+import CostCategoryPicker, { CostCategorySelection } from "./CostCategoryPicker";
 import { formatPeriodLabel } from "@/lib/metrics";
 import { exportIcdAnalysis } from "@/lib/exportExcel";
+import { BookOpen } from "lucide-react";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
 
@@ -35,6 +37,11 @@ export default function IcdAnalysisPage() {
     const [sortPeriodText, setSortPeriodText] = useState("");
     const [diffChoice, setDiffChoice] = useState("Không");
     const [diffReverse, setDiffReverse] = useState(true);
+    const [costCategories, setCostCategories] = useState<CostCategorySelection[]>([]);
+    const [showDiseaseName, setShowDiseaseName] = useState(false);
+
+    // ── ICD-10 name lookup ──
+    const [icdNameMap, setIcdNameMap] = useState<Record<string, string>>({});
 
     // ── Data state ──
     const [loading, setLoading] = useState(false);
@@ -81,6 +88,24 @@ export default function IcdAnalysisPage() {
                 setError(e.message);
                 setInitLoading(false);
             });
+    }, []);
+
+    // ── Load ICD-10 name map ──
+    useEffect(() => {
+        fetch("/api/bq/lookup?table=lookup_icd10")
+            .then((r) => r.json())
+            .then((d) => {
+                if (d.rows && Array.isArray(d.rows)) {
+                    const map: Record<string, string> = {};
+                    for (const row of d.rows) {
+                        const code = String(row.ma_benh_ko_dau ?? "").trim();
+                        const name = String(row.ten_benh ?? "").trim();
+                        if (code && name) map[code] = name;
+                    }
+                    setIcdNameMap(map);
+                }
+            })
+            .catch(() => { /* non-critical */ });
     }, []);
 
     // ── ML2 default ratio ──
@@ -334,6 +359,41 @@ export default function IcdAnalysisPage() {
                             </select>
                         </div>
 
+                        {/* Cost category breakdown */}
+                        <CostCategoryPicker
+                            value={costCategories}
+                            onChange={setCostCategories}
+                        />
+
+                        {/* Disease name toggle */}
+                        <div className="icd-filter-item icd-filter-narrow">
+                            <label className="icd-filter-label">Tên bệnh</label>
+                            <button
+                                type="button"
+                                onClick={() => setShowDiseaseName(!showDiseaseName)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    padding: "5px 10px",
+                                    fontSize: "12px",
+                                    fontWeight: 500,
+                                    border: showDiseaseName ? "1px solid #818cf8" : "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    background: showDiseaseName ? "#eef2ff" : "#fff",
+                                    color: showDiseaseName ? "#4338ca" : "#6b7280",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s",
+                                    fontFamily: "inherit",
+                                    whiteSpace: "nowrap",
+                                }}
+                                title="Hiển thị tên bệnh (tra cứu từ bảng ICD-10)"
+                            >
+                                <BookOpen size={13} />
+                                {showDiseaseName ? "Bật" : "Tắt"}
+                            </button>
+                        </div>
+
                         {/* ML2 filter */}
                         <div className="icd-filter-item">
                             <label className="icd-filter-label">🏥 Loại hình</label>
@@ -428,6 +488,8 @@ export default function IcdAnalysisPage() {
                             pctColLabel={pctColLabel}
                             diffMetric={diffMetric}
                             diffReverse={diffReverse}
+                            costCategories={costCategories}
+                            icdNameMap={showDiseaseName ? icdNameMap : undefined}
                         />
                     ) : (
                         <InfoBanner type="info">

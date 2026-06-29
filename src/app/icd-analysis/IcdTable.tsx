@@ -3,6 +3,7 @@
 import React from "react";
 import { getPeriodColor, formatPeriodLabel } from "@/lib/metrics";
 import { PeriodDef } from "@/components/ui/PeriodSelector";
+import type { CostCategorySelection, CostCategoryMode } from "./CostCategoryPicker";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
 
@@ -12,6 +13,13 @@ export interface IcdRow {
     so_ngay_dtri: number;
     t_tongchi: number;
     t_bhtt: number;
+    t_thuoc: number;
+    t_xn: number;
+    t_cdha: number;
+    t_mau: number;
+    t_pttt: number;
+    t_vtyt: number;
+    t_giuong: number;
 }
 
 export interface IcdPeriodData {
@@ -29,6 +37,8 @@ interface IcdTableProps {
     pctColLabel: string;
     diffMetric: DiffMetric | null;
     diffReverse: boolean;
+    costCategories: CostCategorySelection[];
+    icdNameMap?: Record<string, string>;
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
@@ -84,6 +94,27 @@ function diffColor(val: number): string {
     return "var(--tbl-td-color)";
 }
 
+function computeCategoryValue(
+    row: IcdRow,
+    field: string,
+    mode: CostCategoryMode
+): number {
+    const rawVal = (row as Record<string, number>)[field] || 0;
+    if (mode === "amount") return rawVal;
+    if (mode === "average") return row.so_luot ? rawVal / row.so_luot : 0;
+    // ratio: field / t_tongchi (only for t_thuoc)
+    return row.t_tongchi ? (rawVal / row.t_tongchi) * 100 : 0;
+}
+
+function catColLabel(cat: CostCategorySelection): string {
+    const modeLabel: Record<CostCategoryMode, string> = {
+        amount: "",
+        average: " (BQ)",
+        ratio: " (%)",
+    };
+    return cat.label + modeLabel[cat.mode];
+}
+
 /* ── Component ────────────────────────────────────────────────────────────── */
 
 export default function IcdTable({
@@ -93,9 +124,12 @@ export default function IcdTable({
     pctColLabel,
     diffMetric,
     diffReverse,
+    costCategories,
+    icdNameMap,
 }: IcdTableProps) {
     const n = periodsData.length;
     const showDiff = diffMetric !== null && n >= 2;
+    const showName = icdNameMap && Object.keys(icdNameMap).length > 0;
 
     // Precompute totals per period
     const periodTotals = periodsData.map((pd) => {
@@ -122,7 +156,9 @@ export default function IcdTable({
 
     // Column labels
     const bqLabel = costType === "cpbhyt" ? "BQĐT BHYT" : "BQĐT Tổng chi";
-    const colLabels = ["Số lượt", "Ngày ĐTTB", bqLabel, pctColLabel];
+    const catLabels = costCategories.map(catColLabel);
+    // Columns: Số lượt, Ngày ĐTTB, [category cols...], BQĐT, %Tổng CP
+    const colLabels = ["Số lượt", "Ngày ĐTTB", ...catLabels, bqLabel, pctColLabel];
     const colsPerPeriod = colLabels.length;
 
     // Diff labels
@@ -142,9 +178,18 @@ export default function IcdTable({
                         <th className="ct-th" rowSpan={2} style={{ width: 40, textAlign: "center" }}>
                             STT
                         </th>
-                        <th className="ct-th" rowSpan={2} style={{ textAlign: "center", minWidth: 90 }}>
+                        <th className="ct-th" rowSpan={2} style={{ textAlign: "center", minWidth: 55 }}>
                             Mã bệnh
                         </th>
+                        {showName && (
+                            <th className="ct-th" rowSpan={2} style={{
+                                textAlign: "left",
+                                minWidth: 220,
+                                maxWidth: 320,
+                            }}>
+                                Tên bệnh
+                            </th>
+                        )}
                         {periodsData.map((pd, idx) => {
                             const color = getPeriodColor(idx);
                             const label = formatPeriodLabel(
@@ -216,6 +261,21 @@ export default function IcdTable({
                                 <td className="ct-td icd-code-cell" style={{ textAlign: "left", fontWeight: 600, whiteSpace: "nowrap" }}>
                                     {icdCode}
                                 </td>
+                                {showName && (
+                                    <td className="ct-td" style={{
+                                        textAlign: "left",
+                                        fontSize: "11px",
+                                        color: "#475569",
+                                        lineHeight: 1.4,
+                                        wordBreak: "break-word" as const,
+                                        overflowWrap: "break-word" as const,
+                                        whiteSpace: "normal" as const,
+                                        minWidth: 220,
+                                        maxWidth: 320,
+                                    }}>
+                                        {icdNameMap[icdCode] || icdNameMap[icdCode.replace(/\./g, "")] || ""}
+                                    </td>
+                                )}
 
                                 {periodsData.map((_, pi) => {
                                     const row = periodLookups[pi][icdCode];
@@ -223,7 +283,7 @@ export default function IcdTable({
                                         const vals = computeRowValues(row, costType, periodTotals[pi]);
                                         computedValues[pi] = vals;
                                         return (
-                                            <DataCells key={`data-${pi}`} vals={vals} />
+                                            <DataCells key={`data-${pi}`} vals={vals} row={row} costCategories={costCategories} />
                                         );
                                     } else {
                                         computedValues[pi] = null;
@@ -251,6 +311,8 @@ export default function IcdTable({
                         showDiff={showDiff}
                         diffMetric={diffMetric}
                         diffReverse={diffReverse}
+                        costCategories={costCategories}
+                        icdNameMap={icdNameMap}
                     />
                 </tbody>
             </table>
@@ -260,11 +322,19 @@ export default function IcdTable({
 
 /* ── Sub-components ───────────────────────────────────────────────────────── */
 
-function DataCells({ vals }: { vals: ComputedRow }) {
+function DataCells({ vals, row, costCategories }: { vals: ComputedRow; row: IcdRow; costCategories: CostCategorySelection[] }) {
     return (
         <>
             <td className="ct-td" style={{ textAlign: "right" }}>{fmtNumber(vals.so_luot)}</td>
             <td className="ct-td" style={{ textAlign: "right" }}>{fmtNumber(vals.ngay_dttb, 2)}</td>
+            {costCategories.map((cat) => {
+                const v = computeCategoryValue(row, cat.field, cat.mode);
+                return (
+                    <td key={cat.field} className="ct-td" style={{ textAlign: "right" }}>
+                        {cat.mode === "ratio" ? fmtPct(v) : fmtNumber(v)}
+                    </td>
+                );
+            })}
             <td className="ct-td" style={{ textAlign: "right" }}>{fmtNumber(vals.bq_dt)}</td>
             <td className="ct-td" style={{ textAlign: "right" }}>{fmtPct(vals.pct_val)}</td>
         </>
@@ -329,6 +399,8 @@ function TotalRow({
     showDiff,
     diffMetric,
     diffReverse,
+    costCategories,
+    icdNameMap,
 }: {
     periodsData: IcdPeriodData[];
     periodTotals: { so_luot: number; t_tongchi: number; t_bhtt: number }[];
@@ -337,6 +409,8 @@ function TotalRow({
     showDiff: boolean;
     diffMetric: DiffMetric | null;
     diffReverse: boolean;
+    costCategories: CostCategorySelection[];
+    icdNameMap?: Record<string, string>;
 }) {
     const totalComputed: (ComputedRow | null)[] = [];
 
@@ -344,6 +418,9 @@ function TotalRow({
         <tr className="ct-total-row">
             <td className="ct-td ct-fixed-col" style={{ textAlign: "center", fontWeight: 700 }}></td>
             <td className="ct-td ct-fixed-col" style={{ textAlign: "left", fontWeight: 700 }}>TỔNG TOÀN BỘ</td>
+            {icdNameMap && Object.keys(icdNameMap).length > 0 && (
+                <td className="ct-td" style={{ fontWeight: 700 }}></td>
+            )}
 
             {periodsData.map((pd, pi) => {
                 if (!pd.data || pd.data.length === 0) {
@@ -366,10 +443,24 @@ function TotalRow({
                 };
                 totalComputed[pi] = vals;
 
+                // Compute category totals for this period
+                const catTotals: Record<string, number> = {};
+                for (const cat of costCategories) {
+                    const rawSum = pd.data.reduce((s, r) => s + ((r as Record<string, number>)[cat.field] || 0), 0);
+                    if (cat.mode === "amount") catTotals[cat.field] = rawSum;
+                    else if (cat.mode === "average") catTotals[cat.field] = t.so_luot ? rawSum / t.so_luot : 0;
+                    else catTotals[cat.field] = t.t_tongchi ? (rawSum / t.t_tongchi) * 100 : 0;
+                }
+
                 return (
                     <React.Fragment key={`ttotal-${pi}`}>
                         <td className="ct-td" style={{ textAlign: "right", fontWeight: 700 }}>{fmtNumber(vals.so_luot)}</td>
                         <td className="ct-td" style={{ textAlign: "right", fontWeight: 700 }}>{fmtNumber(vals.ngay_dttb, 2)}</td>
+                        {costCategories.map((cat) => (
+                            <td key={cat.field} className="ct-td" style={{ textAlign: "right", fontWeight: 700 }}>
+                                {cat.mode === "ratio" ? fmtPct(catTotals[cat.field]) : fmtNumber(catTotals[cat.field])}
+                            </td>
+                        ))}
                         <td className="ct-td" style={{ textAlign: "right", fontWeight: 700 }}>{fmtNumber(vals.bq_dt)}</td>
                         <td className="ct-td" style={{ textAlign: "right", fontWeight: 700 }}>{fmtPct(100.0)}</td>
                     </React.Fragment>

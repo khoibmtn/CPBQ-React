@@ -71,7 +71,14 @@ export async function POST(request: Request) {
                         COUNT(*) AS so_luot,
                         SUM(IFNULL(so_ngay_dtri, 0)) AS so_ngay_dtri,
                         SUM(IFNULL(t_tongchi, 0)) AS t_tongchi,
-                        SUM(IFNULL(t_bhtt, 0)) AS t_bhtt
+                        SUM(IFNULL(t_bhtt, 0)) AS t_bhtt,
+                        SUM(IFNULL(t_thuoc, 0)) AS t_thuoc,
+                        SUM(IFNULL(t_xn, 0)) AS t_xn,
+                        SUM(IFNULL(t_cdha, 0)) AS t_cdha,
+                        SUM(IFNULL(t_mau, 0)) AS t_mau,
+                        SUM(IFNULL(t_pttt, 0)) AS t_pttt,
+                        SUM(IFNULL(t_vtyt, 0)) AS t_vtyt,
+                        SUM(IFNULL(t_giuong, 0)) AS t_giuong
                     FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\`
                     WHERE (nam_qt * 100 + thang_qt) BETWEEN ${fromYm} AND ${toYm}
                       AND ma_benh_chinh IS NOT NULL

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runQuery, getBqClient } from "@/lib/bigquery";
 import { getFullTableId } from "@/lib/config";
 
-const ALLOWED_TABLES = ["lookup_loaikcb", "lookup_cskcb", "lookup_khoa"];
+const ALLOWED_TABLES = ["lookup_loaikcb", "lookup_cskcb", "lookup_khoa", "lookup_icd10", "lookup_icd10_config"];
 
 export async function GET(req: NextRequest) {
     try {
