@@ -215,7 +215,11 @@ export default function TabManage() {
                 let total = 0;
 
                 while (hasMore) {
-                    setLoadProgress(`Đang tải trang ${page + 1}… (${allData.length.toLocaleString()} dòng)`);
+                    const totalPages = total > 0 ? Math.ceil(total / 5000) : "?";
+                    const pct = total > 0 ? Math.round((allData.length / total) * 100) : 0;
+                    setLoadProgress(
+                        `Đang tải trang ${page + 1}/${totalPages} (${allData.length.toLocaleString()}/${total > 0 ? total.toLocaleString() : "?"} dòng) …${pct}%`
+                    );
                     const res = await fetch("/api/bq/overview/manage", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -234,7 +238,7 @@ export default function TabManage() {
                     // Update display progressively so user sees data arriving
                     setData([...allData]);
                     setDisplayData([...allData]);
-                    setTotalRows(total);
+                    setTotalRows(total || allData.length);
                 }
 
                 setLoadProgress(null);
@@ -477,7 +481,6 @@ export default function TabManage() {
 
     /* ── Column display config ── */
 
-
     const RIGHT_ALIGN_COLS = new Set([
         "t_tongchi", "t_xn", "t_cdha", "t_thuoc", "t_mau", "t_pttt", "t_vtyt",
         "t_dvkt_tyle", "t_thuoc_tyle", "t_vtyt_tyle", "t_kham", "t_giuong",
@@ -492,6 +495,71 @@ export default function TabManage() {
         "giam_dinh", "is_normalized",
     ]);
 
+    /* ── Column width config (based on analysis of ~40 sample rows) ── */
+    const COL_WIDTHS: Record<string, { minWidth?: number; width?: number; maxWidth?: number }> = {
+        // IDs & codes — compact
+        stt:              { width: 50 },
+        ma_bn:            { width: 90 },
+        gioi_tinh:        { width: 35 },
+        ma_dkbd:          { width: 55 },
+        ma_benh:          { width: 55 },
+        ma_benhkhac:      { minWidth: 70, maxWidth: 160 },
+        ma_lydo_vvien:    { width: 35 },
+        ma_noi_chuyen:    { width: 55 },
+        so_ngay_dtri:     { width: 50 },
+        ket_qua_dtri:     { width: 45 },
+        tinh_trang_rv:    { width: 50 },
+        ma_khoa:          { width: 55 },
+        nam_qt:           { width: 50 },
+        thang_qt:         { width: 45 },
+        ma_khuvuc:        { width: 50 },
+        ma_loaikcb:       { width: 50 },
+        ma_cskcb:         { width: 55 },
+        noi_ttoan:        { width: 45 },
+        giam_dinh:        { width: 50 },
+        is_normalized:    { width: 55 },
+
+        // Names & text — wider
+        ho_ten:           { minWidth: 130, maxWidth: 200 },
+        dia_chi:          { minWidth: 160, maxWidth: 280 },
+        ma_the:           { width: 120 },
+        ten_cskcb:        { minWidth: 120, maxWidth: 200 },
+        khoa:             { minWidth: 80, maxWidth: 160 },
+        ml2:              { width: 75 },
+        ml4:              { minWidth: 80, maxWidth: 140 },
+        ma_benh_chinh:    { width: 55 },
+
+        // Dates — fixed width
+        ngay_sinh:        { width: 90 },
+        gt_the_tu:        { width: 90 },
+        gt_the_den:       { width: 90 },
+        ngay_vao:         { width: 130 },
+        ngay_ra:          { width: 130 },
+        normalized_at:    { width: 130 },
+
+        // Money fields — right-aligned, consistent width
+        t_tongchi:        { width: 95 },
+        t_xn:             { width: 80 },
+        t_cdha:           { width: 80 },
+        t_thuoc:          { width: 85 },
+        t_mau:            { width: 70 },
+        t_pttt:           { width: 80 },
+        t_vtyt:           { width: 75 },
+        t_dvkt_tyle:      { width: 70 },
+        t_thuoc_tyle:     { width: 70 },
+        t_vtyt_tyle:      { width: 70 },
+        t_kham:           { width: 70 },
+        t_giuong:         { width: 80 },
+        t_vchuyen:        { width: 70 },
+        t_bntt:           { width: 90 },
+        t_bhtt:           { width: 95 },
+        t_ngoaids:        { width: 80 },
+        t_xuattoan:       { width: 70 },
+        t_nguonkhac:      { width: 70 },
+        t_datuyen:        { width: 70 },
+        t_vuottran:       { width: 70 },
+    };
+
     /* ── Build table columns ── */
     // Derive columns from actual display data when available
     const effectiveCols = displayData.length > 0
@@ -504,8 +572,8 @@ export default function TabManage() {
         key: col,
         label: COL_LABELS[col] || col,
         align: (RIGHT_ALIGN_COLS.has(col) ? "right" : CENTER_ALIGN_COLS.has(col) ? "center" : "left") as "left" | "center" | "right",
+        ...(COL_WIDTHS[col] || {}),
         ...(col === "is_normalized" ? {
-            width: 80,
             render: (val: unknown) => {
                 const v = val === true || val === "true" || val === 1 || val === "1";
                 return v ? React.createElement("span", { className: "text-green-600 font-bold" }, "x") : "";

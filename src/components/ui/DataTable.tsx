@@ -8,6 +8,8 @@ export interface Column {
     label: string;
     align?: "left" | "center" | "right";
     width?: number;
+    minWidth?: number;
+    maxWidth?: number;
     render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode;
 }
 
@@ -180,6 +182,8 @@ export default function DataTable({
                                         borderColor: 'var(--color-primary-300)',
                                         textAlign: col.align || "left",
                                         width: col.width,
+                                        minWidth: col.minWidth,
+                                        maxWidth: col.maxWidth,
                                     }}
                                 >
                                     {col.label}
@@ -260,6 +264,8 @@ export default function DataTable({
                                                 style={{
                                                     textAlign:
                                                         col.align || "left",
+                                                    minWidth: col.minWidth,
+                                                    maxWidth: col.maxWidth,
                                                 }}
                                             >
                                                 {col.render
