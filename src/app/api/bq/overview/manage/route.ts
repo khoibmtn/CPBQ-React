@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { runQuery, getBqClient } from "@/lib/bigquery";
-import { PROJECT_ID, DATASET_ID, VIEW_ID, FULL_TABLE_ID } from "@/lib/config";
+import { PROJECT_ID, DATASET_ID, VIEW_ID, TABLE_ID, FULL_TABLE_ID } from "@/lib/config";
 import { MANAGE_EXCLUDE_COLS, SCHEMA_COLS, MAPPED_COLS, METADATA_COLS } from "@/lib/schema";
+
+const PAGE_SIZE = 5000;
 
 /**
  * GET /api/bq/overview/manage
@@ -53,9 +55,10 @@ export async function POST(request: Request) {
                 fromYear: number;
                 toYear: number;
             };
+            // Use base table for count — no JOINs needed, much faster
             const query = `
                 SELECT COUNT(*) AS total
-                FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\`
+                FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\`
                 WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
             `;
             const rows = await runQuery<{ total: number }>(query);
@@ -63,16 +66,33 @@ export async function POST(request: Request) {
         }
 
         if (action === "load") {
-            const { fromYear, toYear } = body as {
+            const { fromYear, toYear, page = 0 } = body as {
                 action: string;
                 fromYear: number;
                 toYear: number;
+                page?: number;
             };
+            const offset = page * PAGE_SIZE;
+
+            // Only fetch total on first page — client caches it for subsequent pages
+            let total = 0;
+            if (page === 0) {
+                const countQuery = `
+                    SELECT COUNT(*) AS total
+                    FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\`
+                    WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
+                `;
+                const countRows = await runQuery<{ total: number }>(countQuery);
+                total = countRows[0]?.total ?? 0;
+            }
+
+            // Paginated fetch from VIEW
             const query = `
                 SELECT *
                 FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\`
                 WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
                 ORDER BY nam_qt DESC, thang_qt DESC, ma_cskcb
+                LIMIT ${PAGE_SIZE} OFFSET ${offset}
             `;
             const rows = await runQuery(query);
             // Remove excluded columns
@@ -83,7 +103,13 @@ export async function POST(request: Request) {
                 }
                 return r;
             });
-            return NextResponse.json({ data: cleaned, total: cleaned.length });
+            return NextResponse.json({
+                data: cleaned,
+                ...(page === 0 ? { total } : {}),
+                page,
+                pageSize: PAGE_SIZE,
+                hasMore: cleaned.length === PAGE_SIZE,
+            });
         }
 
         if (action === "search") {

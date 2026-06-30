@@ -189,6 +189,9 @@ export default function TabManage() {
         return "BigQuery";
     }, [method, fromYear, toYear]);
 
+    // Loading progress for paginated fetch
+    const [loadProgress, setLoadProgress] = useState<string | null>(null);
+
     /* ── Load data ── */
     const handleLoad = useCallback(async () => {
         setLoading(true);
@@ -198,26 +201,46 @@ export default function TabManage() {
         setIsSearching(false);
         setSelectedRows(new Set());
         setDeleteMsg(null);
+        setLoadProgress(null);
 
         const resolvedMethod = getActualMethod();
         setActualMethod(resolvedMethod);
 
         try {
             if (resolvedMethod === "RAM") {
-                // Load all rows into memory
-                const res = await fetch("/api/bq/overview/manage", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "load", fromYear, toYear }),
-                });
-                const d = await safeJson(res);
-                if (d.error) throw new Error(d.error);
-                const loadedData: Record<string, unknown>[] = d.data || [];
-                setData(loadedData);
-                setDisplayData(loadedData);
-                setTotalRows(d.total || 0);
-                if (loadedData.length > 0) {
-                    const dataCols = Object.keys(loadedData[0]).filter(
+                // Load rows in pages to avoid Vercel timeout
+                let allData: Record<string, unknown>[] = [];
+                let page = 0;
+                let hasMore = true;
+                let total = 0;
+
+                while (hasMore) {
+                    setLoadProgress(`Đang tải trang ${page + 1}… (${allData.length.toLocaleString()} dòng)`);
+                    const res = await fetch("/api/bq/overview/manage", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "load", fromYear, toYear, page }),
+                    });
+                    const d = await safeJson(res);
+                    if (d.error) throw new Error(d.error);
+
+                    const pageData: Record<string, unknown>[] = d.data || [];
+                    allData = allData.concat(pageData);
+                    // total is only returned on page 0
+                    if (d.total != null) total = d.total;
+                    hasMore = d.hasMore === true;
+                    page++;
+
+                    // Update display progressively so user sees data arriving
+                    setData([...allData]);
+                    setDisplayData([...allData]);
+                    setTotalRows(total);
+                }
+
+                setLoadProgress(null);
+
+                if (allData.length > 0) {
+                    const dataCols = Object.keys(allData[0]).filter(
                         (c) => c !== "upload_timestamp" && c !== "source_file"
                     );
                     setColumns(dataCols);
@@ -242,6 +265,7 @@ export default function TabManage() {
             setError(e instanceof Error ? e.message : "Unknown error");
         } finally {
             setLoading(false);
+            setLoadProgress(null);
         }
     }, [fromYear, toYear, getActualMethod]);
 
@@ -643,7 +667,7 @@ export default function TabManage() {
                     >
                         {loading ? (
                             <>
-                                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
+                                <Loader2 className="w-4 h-4 animate-spin" /> {loadProgress || "Đang tải..."}
                             </>
                         ) : (
                             "📥 Tải dữ liệu"
