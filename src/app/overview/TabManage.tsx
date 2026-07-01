@@ -18,7 +18,7 @@ async function safeJson(res: Response) {
     }
 }
 import { SCHEMA_COLS, MANAGE_EXCLUDE_COLS } from "@/lib/schema";
-import MetricCard, { MetricGrid } from "@/components/ui/MetricCard";
+import DataInsight from "./DataInsight";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -499,9 +499,9 @@ export default function TabManage() {
     const COL_WIDTHS: Record<string, { minWidth?: number; width?: number; maxWidth?: number }> = {
         // IDs & codes — compact
         stt:              { width: 50 },
-        ma_bn:            { width: 90 },
+        ma_bn:            { width: 110 },
         gioi_tinh:        { width: 35 },
-        ma_dkbd:          { width: 55 },
+        ma_dkbd:          { width: 70 },
         ma_benh:          { width: 55 },
         ma_benhkhac:      { minWidth: 70, maxWidth: 160 },
         ma_lydo_vvien:    { width: 35 },
@@ -509,12 +509,12 @@ export default function TabManage() {
         so_ngay_dtri:     { width: 50 },
         ket_qua_dtri:     { width: 45 },
         tinh_trang_rv:    { width: 50 },
-        ma_khoa:          { width: 55 },
-        nam_qt:           { width: 50 },
+        ma_khoa:          { width: 60 },
+        nam_qt:           { width: 55 },
         thang_qt:         { width: 45 },
         ma_khuvuc:        { width: 50 },
         ma_loaikcb:       { width: 50 },
-        ma_cskcb:         { width: 55 },
+        ma_cskcb:         { width: 60 },
         noi_ttoan:        { width: 45 },
         giam_dinh:        { width: 50 },
         is_normalized:    { width: 55 },
@@ -522,7 +522,7 @@ export default function TabManage() {
         // Names & text — wider
         ho_ten:           { minWidth: 130, maxWidth: 200 },
         dia_chi:          { minWidth: 160, maxWidth: 280 },
-        ma_the:           { width: 120 },
+        ma_the:           { width: 130 },
         ten_cskcb:        { minWidth: 120, maxWidth: 200 },
         khoa:             { minWidth: 80, maxWidth: 160 },
         ml2:              { width: 75 },
@@ -531,28 +531,28 @@ export default function TabManage() {
 
         // Dates — fixed width
         ngay_sinh:        { width: 90 },
-        gt_the_tu:        { width: 90 },
-        gt_the_den:       { width: 90 },
-        ngay_vao:         { width: 130 },
-        ngay_ra:          { width: 130 },
+        gt_the_tu:        { width: 100 },
+        gt_the_den:       { width: 100 },
+        ngay_vao:         { width: 145 },
+        ngay_ra:          { width: 145 },
         normalized_at:    { width: 130 },
 
         // Money fields — right-aligned, consistent width
-        t_tongchi:        { width: 95 },
-        t_xn:             { width: 80 },
+        t_tongchi:        { width: 110 },
+        t_xn:             { width: 85 },
         t_cdha:           { width: 80 },
-        t_thuoc:          { width: 85 },
+        t_thuoc:          { width: 90 },
         t_mau:            { width: 70 },
-        t_pttt:           { width: 80 },
+        t_pttt:           { width: 90 },
         t_vtyt:           { width: 75 },
         t_dvkt_tyle:      { width: 70 },
         t_thuoc_tyle:     { width: 70 },
         t_vtyt_tyle:      { width: 70 },
         t_kham:           { width: 70 },
-        t_giuong:         { width: 80 },
+        t_giuong:         { width: 85 },
         t_vchuyen:        { width: 70 },
-        t_bntt:           { width: 90 },
-        t_bhtt:           { width: 95 },
+        t_bntt:           { width: 105 },
+        t_bhtt:           { width: 110 },
         t_ngoaids:        { width: 80 },
         t_xuattoan:       { width: 70 },
         t_nguonkhac:      { width: 70 },
@@ -652,13 +652,7 @@ export default function TabManage() {
         }, 50);
     }, [displayData, fromYear, toYear]);
 
-    /* ── Metrics ── */
-    const nMonths = actualMethod === "RAM" && data && data.length > 0
-        ? new Set(data.map((r) => `${r.nam_qt}-${r.thang_qt}`)).size
-        : toYear - fromYear + 1;
-    const nCskcb = actualMethod === "RAM" && data && data.length > 0
-        ? new Set(data.map((r) => r.ma_cskcb as string)).size
-        : "–";
+    /* ── Metrics — now handled by DataInsight component ── */
 
     /* ── Render ── */
 
@@ -752,29 +746,15 @@ export default function TabManage() {
                 </div>
             )}
 
-            {/* Metrics */}
+            {/* Dynamic Insights */}
             {data !== null && (
                 <>
-                    <MetricGrid>
-                        <MetricCard
-                            label="Số dòng"
-                            value={totalRows.toLocaleString()}
-                            icon="📊"
-                            color="blue"
-                        />
-                        <MetricCard
-                            label="Số tháng"
-                            value={String(nMonths)}
-                            icon="📅"
-                            color="cyan"
-                        />
-                        <MetricCard
-                            label="Số CSKCB"
-                            value={String(nCskcb)}
-                            icon="🏥"
-                            color="purple"
-                        />
-                    </MetricGrid>
+                    <DataInsight
+                        data={data}
+                        totalRows={totalRows}
+                        columns={columns}
+                        columnLabels={COL_LABELS}
+                    />
 
                     <hr className="border-gray-200 my-4" />
 
