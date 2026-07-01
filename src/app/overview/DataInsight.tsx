@@ -59,10 +59,15 @@ function nextId(): string {
 export default function DataInsight({ data, totalRows, columns, columnLabels }: DataInsightProps) {
     const [stats, setStats] = useState<InsightStat[]>([]);
 
-    const availableCols = useMemo(
-        () => columns.filter((c) => !EXCLUDE_INSIGHT.has(c)),
-        [columns]
-    );
+    // Derive available columns from actual data keys — ensures all fields
+    // that appear in the table (including JOINed ones like khoa, ml2, ml4, ten_cskcb)
+    // are available in the dropdown
+    const availableCols = useMemo(() => {
+        if (data.length > 0) {
+            return Object.keys(data[0]).filter((c) => !EXCLUDE_INSIGHT.has(c));
+        }
+        return columns.filter((c) => !EXCLUDE_INSIGHT.has(c));
+    }, [data, columns]);
 
     const addStat = () => {
         // Pick first col not already used

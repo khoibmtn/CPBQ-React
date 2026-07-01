@@ -421,6 +421,7 @@ td.ct-khoa-col {
 
 .data-table-compact th {
   @apply px-2.5 py-2 text-[10.5px];
+  white-space: nowrap;
 }
 
 .data-table-compact td {
