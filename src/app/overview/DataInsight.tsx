@@ -58,6 +58,7 @@ function nextId(): string {
 
 export default function DataInsight({ data, totalRows, columns, columnLabels }: DataInsightProps) {
     const [stats, setStats] = useState<InsightStat[]>([]);
+    const [isLoaded, setIsLoaded] = useState(false);
 
     // Derive available columns from actual data keys — ensures all fields
     // that appear in the table (including JOINed ones like khoa, ml2, ml4, ten_cskcb)
@@ -68,6 +69,32 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
         }
         return columns.filter((c) => !EXCLUDE_INSIGHT.has(c));
     }, [data, columns]);
+
+    // 1. Load from BigQuery on mount
+    React.useEffect(() => {
+        fetch("/api/bq/settings?key=data_insight_stats")
+            .then((r) => r.json())
+            .then((res) => {
+                if (res.value && Array.isArray(res.value)) {
+                    setStats(res.value);
+                }
+                setIsLoaded(true);
+            })
+            .catch(() => setIsLoaded(true));
+    }, []);
+
+    // 2. Save to BigQuery when stats change (debounced)
+    React.useEffect(() => {
+        if (!isLoaded) return;
+        const timer = setTimeout(() => {
+            fetch("/api/bq/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: "data_insight_stats", value: stats }),
+            }).catch(console.error);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [stats, isLoaded]);
 
     const addStat = () => {
         // Pick first col not already used

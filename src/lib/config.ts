@@ -17,6 +17,7 @@ export const LOOKUP_PROFILES_TABLE = "lookup_profiles";
 export const LOOKUP_KHOA_MERGE_TABLE = "lookup_khoa_merge";
 export const LOOKUP_ICD10_TABLE = "lookup_icd10";
 export const LOOKUP_ICD10_CONFIG_TABLE = "lookup_icd10_config";
+export const APP_SETTINGS_TABLE = "app_settings";
 
 // VIEW (enriched data)
 export const VIEW_ID = "v_thanh_toan";
