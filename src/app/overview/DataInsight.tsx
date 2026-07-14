@@ -266,6 +266,17 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
         },
     };
 
+    // Compute normalized count from data
+    const normalizedCount = useMemo(() => {
+        if (!data || data.length === 0) return 0;
+        return data.filter((r) => {
+            const v = r.is_normalized;
+            return v === true || v === "true" || v === 1 || v === "1";
+        }).length;
+    }, [data]);
+
+    const normalizedPct = totalRows > 0 ? Math.round((normalizedCount / totalRows) * 100) : 0;
+
     return (
         <section style={S.container}>
             {/* Total rows - always visible */}
@@ -279,6 +290,21 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
                     </div>
                     <div style={{ fontSize: "0.625rem", color: "#94a3b8", marginTop: "0.25rem" }}>
                         {data.length !== totalRows && data.length > 0 ? `(hiển thị ${fmt(data.length)})` : "hồ sơ"}
+                    </div>
+                </div>
+            </div>
+
+            {/* Normalized count - always visible */}
+            <div style={{ ...S.card, flex: "0 0 auto", minWidth: "140px", maxWidth: "160px", borderColor: "#a7f3d0" }}>
+                <div style={{ padding: "0.75rem 0.625rem", textAlign: "center" }}>
+                    <div style={{ fontSize: "0.625rem", fontWeight: 700, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
+                        SL Chuẩn hóa
+                    </div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#059669", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+                        {fmt(normalizedCount)}
+                    </div>
+                    <div style={{ fontSize: "0.625rem", color: "#6ee7b7", marginTop: "0.25rem", fontWeight: 600 }}>
+                        {normalizedPct}% tổng số
                     </div>
                 </div>
             </div>
