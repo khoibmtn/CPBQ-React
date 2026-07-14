@@ -1,13 +1,57 @@
 import { NextResponse } from "next/server";
 import { runQuery } from "@/lib/bigquery";
-import { PROJECT_ID, DATASET_ID, VIEW_ID } from "@/lib/config";
+import {
+    PROJECT_ID,
+    DATASET_ID,
+    VIEW_ID,
+    getFullTableId,
+    LOOKUP_KHOA_TABLE,
+    LOOKUP_KHOA_MERGE_TABLE,
+} from "@/lib/config";
 
 /**
  * GET /api/bq/icd-analysis
- * Returns: availableYearMonths
+ * Returns: availableYearMonths, mergeRules
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Load merge rules: source_khoa → target_khoa */
+async function loadMergeRules(): Promise<Record<string, string>> {
+    try {
+        const mergeTable = getFullTableId(LOOKUP_KHOA_MERGE_TABLE);
+        const mergeQuery = `SELECT source_khoa, target_khoa FROM \`${mergeTable}\``;
+        const mergeRows = await runQuery<{ source_khoa: string; target_khoa: string }>(mergeQuery);
+
+        const khoaTable = getFullTableId(LOOKUP_KHOA_TABLE);
+        const khoaQ = `SELECT DISTINCT short_name FROM \`${khoaTable}\``;
+        const khoaNames = await runQuery<{ short_name: string }>(khoaQ);
+        const shortNameSet = new Set(khoaNames.map((r) => r.short_name));
+
+        const rules: Record<string, string> = {};
+        for (const row of mergeRows) {
+            let srcName = row.source_khoa;
+            if (!shortNameSet.has(srcName)) {
+                const match = srcName.match(/^\S+\s+(.+?)\s+\(/);
+                if (match) srcName = match[1];
+            }
+            rules[srcName] = row.target_khoa;
+        }
+        return rules;
+    } catch {
+        return {};
+    }
+}
+
+/** Build reverse map: target_khoa → [source_khoa1, source_khoa2, ...] */
+function buildReverseRules(mergeRules: Record<string, string>): Record<string, string[]> {
+    const reverse: Record<string, string[]> = {};
+    for (const [src, tgt] of Object.entries(mergeRules)) {
+        if (!reverse[tgt]) reverse[tgt] = [];
+        reverse[tgt].push(src);
+    }
+    return reverse;
+}
 
 export async function GET() {
     try {
@@ -18,7 +62,9 @@ export async function GET() {
         `;
         const ymRows = await runQuery<{ nam_qt: number; thang_qt: number }>(ymQuery);
 
-        return NextResponse.json({ yearMonths: ymRows });
+        const mergeRules = await loadMergeRules();
+
+        return NextResponse.json({ yearMonths: ymRows, mergeRules });
     } catch (e: unknown) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Unknown error" },
@@ -53,11 +99,24 @@ export async function POST(request: Request) {
             );
         }
 
-        // Build ml2/khoa clauses
+        // Load merge rules
+        const mergeRules = await loadMergeRules();
+        const reverseRules = buildReverseRules(mergeRules);
+
+        // Build ml2 clause
         const ml2Clause = ml2Filter !== "all" ? `AND ml2 = '${ml2Filter}'` : "";
-        const khoaClause = khoaFilter !== "all"
-            ? `AND khoa = '${khoaFilter.replace(/'/g, "\\'")}'`
-            : "";
+
+        // Build khoa clause — expand to include source departments that merge into selected target
+        let khoaClause = "";
+        if (khoaFilter !== "all") {
+            const khoaNames = [khoaFilter];
+            // If selected khoa is a merge target, include its source departments
+            if (reverseRules[khoaFilter]) {
+                khoaNames.push(...reverseRules[khoaFilter]);
+            }
+            const escaped = khoaNames.map((k) => `'${k.replace(/'/g, "\\'")}'`);
+            khoaClause = `AND khoa IN (${escaped.join(", ")})`;
+        }
 
         // Query ICD data for each period
         const periodsData = await Promise.all(
@@ -91,7 +150,7 @@ export async function POST(request: Request) {
             })
         );
 
-        // Get available khoa for the combined periods
+        // Get available khoa for the combined periods, then apply merge rules
         const orClauses = periods.map((p) => {
             const fromYm = p.fromYear * 100 + p.fromMonth;
             const toYm = p.toYear * 100 + p.toMonth;
@@ -106,7 +165,16 @@ export async function POST(request: Request) {
             ORDER BY khoa
         `;
         const khoaRows = await runQuery<{ khoa: string }>(khoaQuery);
-        const availableKhoa = khoaRows.map((r) => r.khoa).sort();
+
+        // Apply merge rules to available khoa list:
+        // - Remap source khoa names to their target
+        // - Deduplicate
+        const khoaSet = new Set<string>();
+        for (const r of khoaRows) {
+            const mapped = mergeRules[r.khoa] || r.khoa;
+            khoaSet.add(mapped);
+        }
+        const availableKhoa = [...khoaSet].sort();
 
         return NextResponse.json({ periodsData, availableKhoa });
     } catch (e: unknown) {
