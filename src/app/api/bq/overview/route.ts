@@ -71,7 +71,9 @@ export async function POST(request: Request) {
                     t.ma_cskcb,
                     cs.ten_cskcb,
                     COUNT(*) AS so_luot,
-                    SUM(t.t_tongchi) AS tong_chi
+                    SUM(t.t_tongchi) AS tong_chi,
+                    COUNTIF(t.is_normalized = TRUE) AS so_luot_chuan_hoa,
+                    SUM(IF(t.is_normalized = TRUE, t.t_tongchi, 0)) AS tong_chi_chuan_hoa
                 FROM \`${FULL_TABLE_ID}\` t
                 LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.lookup_loaikcb\` lk
                     ON CAST(t.ma_loaikcb AS STRING) = CAST(lk.ma_loaikcb AS STRING)

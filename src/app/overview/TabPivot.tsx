@@ -1,5 +1,5 @@
 "use client";
-import { Loader2, TrendingUp, Activity, Bed, Search } from "lucide-react";
+import { Loader2, TrendingUp, Activity, Bed, Search, RefreshCw } from "lucide-react";
 
 import { useState, useEffect, useCallback } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
@@ -14,6 +14,8 @@ interface PivotRow {
     ten_cskcb: string | null;
     so_luot: number;
     tong_chi: number;
+    so_luot_chuan_hoa: number;
+    tong_chi_chuan_hoa: number;
 }
 
 interface CskcbInfo {
@@ -115,7 +117,8 @@ export default function TabPivot() {
 
         const pivotRows: Record<string, number | string>[] = [];
         let grandNgoai = 0,
-            grandNoi = 0;
+            grandNoi = 0,
+            grandChuanHoa = 0;
 
         for (let thang = 1; thang <= 12; thang++) {
             const row: Record<string, number | string> = { thang: `Tháng ${String(thang).padStart(2, "0")}` };
@@ -143,11 +146,19 @@ export default function TabPivot() {
             row["noi_tong"] = tongNoi;
             grandNoi += tongNoi;
 
+            // SL Chuẩn hóa — sum across all cskcb for this month
+            const chuanHoaField = metric === "tong_chi" ? "tong_chi_chuan_hoa" : "so_luot_chuan_hoa";
+            const monthChuanHoa = rawData
+                .filter((r) => r.thang_qt === thang)
+                .reduce((s, r) => s + ((r as unknown as Record<string, number>)[chuanHoaField] || 0), 0);
+            row["chuan_hoa"] = monthChuanHoa;
+            grandChuanHoa += monthChuanHoa;
+
             row["tong_cong"] = tongNgoai + tongNoi;
             pivotRows.push(row);
         }
 
-        return { pivotRows, ngoaiCskcb, noiCskcb, grandNgoai, grandNoi };
+        return { pivotRows, ngoaiCskcb, noiCskcb, grandNgoai, grandNoi, grandChuanHoa };
     };
 
     const fmt = (v: number | null | undefined) =>
@@ -205,6 +216,15 @@ export default function TabPivot() {
                             <option value="tong_chi">Tổng chi phí (VNĐ)</option>
                         </select>
                     </div>
+                    <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={() => { setUserChangedYear(true); }}
+                        disabled={loading}
+                        title="Tải lại dữ liệu"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </button>
                 </div>
             </section>
 
@@ -306,6 +326,9 @@ export default function TabPivot() {
                                                 Nội trú
                                             </th>
                                         )}
+                                        <th className="p-3 border border-gray-200 min-w-[100px]" style={{ color: '#059669', backgroundColor: '#ecfdf5' }}>
+                                            SL Chuẩn hóa
+                                        </th>
                                         <th className="p-3 border border-gray-200 text-slate-900 bg-slate-200 min-w-[100px]">
                                             Tổng cộng
                                         </th>
@@ -331,6 +354,7 @@ export default function TabPivot() {
                                         {pivot.noiCskcb.length > 0 && (
                                             <th className="p-2 border border-gray-200 bg-orange-100/50 text-orange-700">Tổng</th>
                                         )}
+                                        <th className="p-2 border border-gray-200" style={{ color: '#059669', backgroundColor: '#ecfdf5' }}></th>
                                         <th className="p-2 border border-gray-200 text-slate-800 bg-slate-100/50">Toàn viện</th>
                                     </tr>
                                 </thead>
@@ -364,6 +388,9 @@ export default function TabPivot() {
                                                         {fmt(row["noi_tong"] as number)}
                                                     </td>
                                                 )}
+                                                <td className="p-3 text-right border border-gray-200" style={{ color: '#059669', fontWeight: 700, backgroundColor: '#f0fdf4' }}>
+                                                    {fmt(row["chuan_hoa"] as number)}
+                                                </td>
                                                 <td className="p-3 text-right font-bold text-slate-900 bg-slate-50/80 border border-gray-200">
                                                     {fmt(row["tong_cong"] as number)}
                                                 </td>
@@ -406,6 +433,9 @@ export default function TabPivot() {
                                                 {fmt(pivot.grandNoi)}
                                             </td>
                                         )}
+                                        <td className="p-4 text-right border border-gray-200" style={{ color: '#059669', fontWeight: 700, backgroundColor: '#ecfdf5' }}>
+                                            {fmt(pivot.grandChuanHoa)}
+                                        </td>
                                         <td className="p-4 text-right bg-indigo-100 border border-gray-200 font-bold">
                                             {fmt(pivot.grandNgoai + pivot.grandNoi)}
                                         </td>
