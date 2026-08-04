@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
 async function handleCompare(body: {
     groups: GroupKey[];
-    excelKeys: Record<string, { keys: string[]; count: number; cost: number; subs: { label: string; count: number; cost: number }[] }>;
+    excelKeys: Record<string, { dupCount: number; count: number; cost: number; subs: { label: string; count: number; cost: number }[] }>;
 }) {
     const { groups, excelKeys } = body;
     if (!groups?.length) {
@@ -57,7 +57,7 @@ async function handleCompare(body: {
 
     for (const g of groups) {
         const groupId = `${g.ma_cskcb}|${g.thang_qt}|${g.nam_qt}`;
-        const excelGroup = excelKeys[groupId] || { keys: [], count: 0 };
+        const excelGroup = excelKeys[groupId] || { dupCount: 0, count: 0, cost: 0, subs: [] };
 
         // Count total BQ rows, sum cost, and breakdown normalized/raw for this group
         const countQuery = `
@@ -76,29 +76,7 @@ async function handleCompare(body: {
         const bqNormalized = Number(countRows[0]?.normalized_cnt || 0);
         const bqRaw = bqCount - bqNormalized;
 
-        // Get BQ key columns for duplicate comparison
-        let dupCount = 0;
-        if (bqCount > 0 && excelGroup.keys.length > 0) {
-            const keyCols = ROW_KEY_COLS.join(", ");
-            const keyQuery = `
-                SELECT ${keyCols}
-                FROM \`${FULL_TABLE_ID}\`
-                WHERE ma_cskcb = '${esc(g.ma_cskcb)}'
-                  AND thang_qt = ${Number(g.thang_qt)}
-                  AND nam_qt = ${Number(g.nam_qt)}
-            `;
-            const [keyJob] = await client.createQueryJob({ query: keyQuery });
-            const [bqRows] = await keyJob.getQueryResults();
-
-            const bqKeySet = new Set(
-                bqRows.map((r: Row) =>
-                    ROW_KEY_COLS.map((c) => bqScalar(r[c])).join("|")
-                )
-            );
-
-            const excelKeySet = new Set(excelGroup.keys);
-            dupCount = [...excelKeySet].filter((k) => bqKeySet.has(k)).length;
-        }
+        const dupCount = excelGroup.dupCount || 0;
 
         // Get BQ breakdown by nội trú / ngoại trú using lookup table
         const lookupTable = `\`${PROJECT_ID}.${DATASET_ID}.lookup_loaikcb\``;

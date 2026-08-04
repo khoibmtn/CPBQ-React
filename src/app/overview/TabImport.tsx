@@ -444,16 +444,26 @@ export default function TabImport() {
                 let dupIndices = new Set<number>();
                 let normalizedStatus: Record<number, boolean> = {};
                 try {
-                    const res = await fetch("/api/bq/overview/import", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ keys }),
-                    });
-                    const d = await res.json();
-                    if (d.error) throw new Error(d.error);
-                    dupIndices = new Set<number>(d.duplicateIndices || []);
-                    normalizedStatus = d.normalizedStatus || {};
-                } catch {
+                    const CHUNK_SIZE = 5000;
+                    for (let i = 0; i < keys.length; i += CHUNK_SIZE) {
+                        const chunk = keys.slice(i, i + CHUNK_SIZE);
+                        const res = await fetch("/api/bq/overview/import", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ keys: chunk }),
+                        });
+                        const d = await res.json();
+                        if (d.error) throw new Error(d.error);
+                        
+                        (d.duplicateIndices || []).forEach((idx: number) => {
+                            dupIndices.add(idx + i);
+                        });
+                        Object.entries(d.normalizedStatus || {}).forEach(([k, v]) => {
+                            normalizedStatus[Number(k) + i] = v as boolean;
+                        });
+                    }
+                } catch (e) {
+                    console.error("Duplicate check failed:", e);
                     // BQ unreachable — treat all as new
                 }
 
@@ -820,7 +830,7 @@ export default function TabImport() {
         try {
             const allRows = currentSheet.validRows;
             // Group rows by ma_cskcb + thang_qt + nam_qt
-            const groupMap = new Map<string, { ma_cskcb: string; thang_qt: number; nam_qt: number; rows: Record<string, unknown>[]; keys: string[]; cost: number; subs: Map<string, { count: number; cost: number }> }>();
+            const groupMap = new Map<string, { ma_cskcb: string; thang_qt: number; nam_qt: number; rows: Record<string, unknown>[]; dupCount: number; cost: number; subs: Map<string, { count: number; cost: number }> }>();
             for (const row of allRows) {
                 const ma = String(row.ma_cskcb || "");
                 const thang = Number(row.thang_qt) || 0;
@@ -828,14 +838,13 @@ export default function TabImport() {
                 if (!ma || !thang || !nam) continue;
                 const gid = `${ma}|${thang}|${nam}`;
                 if (!groupMap.has(gid)) {
-                    groupMap.set(gid, { ma_cskcb: ma, thang_qt: thang, nam_qt: nam, rows: [], keys: [], cost: 0, subs: new Map() });
+                    groupMap.set(gid, { ma_cskcb: ma, thang_qt: thang, nam_qt: nam, rows: [], dupCount: 0, cost: 0, subs: new Map() });
                 }
                 const g = groupMap.get(gid)!;
                 g.rows.push(row);
-                // Build composite key for duplicate detection
-                const key = ["ma_cskcb", "ma_bn", "ma_loaikcb", "ngay_vao", "ngay_ra"]
-                    .map((c) => String(row[c] ?? "")).join("|");
-                g.keys.push(key);
+                if (row._isDuplicate) {
+                    g.dupCount++;
+                }
                 g.cost += Number(row.t_tongchi) || 0;
                 // Track sub-breakdown by nội trú / ngoại trú
                 const ml = Number(row.ma_loaikcb);
@@ -849,10 +858,10 @@ export default function TabImport() {
             const groups = Array.from(groupMap.values()).map((g) => ({
                 ma_cskcb: g.ma_cskcb, thang_qt: g.thang_qt, nam_qt: g.nam_qt,
             }));
-            const excelKeys: Record<string, { keys: string[]; count: number; cost: number; subs: { label: string; count: number; cost: number }[] }> = {};
+            const excelKeys: Record<string, { dupCount: number; count: number; cost: number; subs: { label: string; count: number; cost: number }[] }> = {};
             for (const [gid, g] of groupMap) {
                 excelKeys[gid] = {
-                    keys: g.keys,
+                    dupCount: g.dupCount,
                     count: g.rows.length,
                     cost: g.cost,
                     subs: Array.from(g.subs.entries()).map(([label, v]) => ({ label, ...v })),
