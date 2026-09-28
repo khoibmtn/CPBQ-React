@@ -766,7 +766,7 @@ export default function TabManage() {
                     <div className="flex items-center gap-2 mt-2 ml-1">
                         <span className="text-xs text-slate-500">Từ tháng</span>
                         <select
-                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold px-2 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold pl-2.5 pr-7 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer min-w-[60px]"
                             value={fromMonth}
                             onChange={(e) => setFromMonth(+e.target.value)}
                         >
@@ -776,7 +776,7 @@ export default function TabManage() {
                         </select>
                         <span className="text-xs text-slate-500">đến tháng</span>
                         <select
-                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold px-2 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold pl-2.5 pr-7 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer min-w-[60px]"
                             value={toMonth}
                             onChange={(e) => setToMonth(+e.target.value)}
                         >
