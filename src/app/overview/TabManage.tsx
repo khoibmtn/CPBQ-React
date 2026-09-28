@@ -103,6 +103,9 @@ export default function TabManage() {
     const [fromYear, setFromYear] = useSessionState<number>("mg_fromYear", 0);
     const [toYear, setToYear] = useSessionState<number>("mg_toYear", 0);
     const [method, setMethod] = useSessionState<string>("mg_method", "🧠 Tự động");
+    const [fullYear, setFullYear] = useSessionState<boolean>("mg_fullYear", true);
+    const [fromMonth, setFromMonth] = useSessionState<number>("mg_fromMonth", 1);
+    const [toMonth, setToMonth] = useSessionState<number>("mg_toMonth", 12);
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(years.length === 0);
     const [error, setError] = useState<string | null>(null);
@@ -223,7 +226,10 @@ export default function TabManage() {
                     const res = await fetch("/api/bq/overview/manage", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "load", fromYear, toYear, page }),
+                        body: JSON.stringify({
+                            action: "load", fromYear, toYear, page,
+                            ...(fullYear ? {} : { fromMonth, toMonth }),
+                        }),
                     });
                     const d = await safeJson(res);
                     if (d.error) throw new Error(d.error);
@@ -257,7 +263,10 @@ export default function TabManage() {
                 const res = await fetch("/api/bq/overview/manage", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "count", fromYear, toYear }),
+                    body: JSON.stringify({
+                        action: "count", fromYear, toYear,
+                        ...(fullYear ? {} : { fromMonth, toMonth }),
+                    }),
                 });
                 const d = await safeJson(res);
                 if (d.error) throw new Error(d.error);
@@ -271,7 +280,7 @@ export default function TabManage() {
             setLoading(false);
             setLoadProgress(null);
         }
-    }, [fromYear, toYear, getActualMethod]);
+    }, [fromYear, toYear, fromMonth, toMonth, fullYear, getActualMethod]);
 
 
     /* ── Search ── */
@@ -325,6 +334,7 @@ export default function TabManage() {
                         conditions,
                         fromYear,
                         toYear,
+                        ...(fullYear ? {} : { fromMonth, toMonth }),
                     }),
                 });
                 const d = await safeJson(res);
@@ -723,6 +733,20 @@ export default function TabManage() {
                             <option value="☁️ BigQuery">☁️ BigQuery</option>
                         </select>
                     </div>
+                    <label
+                        className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 cursor-pointer select-none"
+                        title="Bỏ chọn để lọc theo khoảng tháng"
+                    >
+                        <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            checked={fullYear}
+                            onChange={(e) => setFullYear(e.target.checked)}
+                        />
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                            Cả năm
+                        </span>
+                    </label>
                     <button
                         className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer"
                         onClick={handleLoad}
@@ -737,12 +761,41 @@ export default function TabManage() {
                         )}
                     </button>
                 </div>
+                {/* Month range — shown when fullYear is unchecked */}
+                {!fullYear && (
+                    <div className="flex items-center gap-2 mt-2 ml-1">
+                        <span className="text-xs text-slate-500">Từ tháng</span>
+                        <select
+                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold px-2 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                            value={fromMonth}
+                            onChange={(e) => setFromMonth(+e.target.value)}
+                        >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-slate-500">đến tháng</span>
+                        <select
+                            className="bg-white border border-slate-200 rounded-md text-sm font-semibold px-2 py-1 focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+                            value={toMonth}
+                            onChange={(e) => setToMonth(+e.target.value)}
+                        >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                        </select>
+                        <span className="text-[10px] text-slate-400 italic">
+                            ({fromMonth}/{fromYear} → {toMonth}/{toYear})
+                        </span>
+                    </div>
+                )}
             </section>
             {data !== null && (
                 <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
                     {actualMethod === "RAM" ? "💾" : "☁️"} Phương pháp:
                     <strong> {actualMethod}</strong>
                     {" "}• {toYear - fromYear + 1} năm ({fromYear}–{toYear})
+                    {!fullYear && ` • Tháng ${fromMonth}/${fromYear} → ${toMonth}/${toYear}`}
                     {actualMethod === "BigQuery" && " • Tìm kiếm sẽ truy vấn trực tiếp BigQuery"}
                 </div>
             )}

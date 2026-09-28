@@ -5,6 +5,19 @@ import { MANAGE_EXCLUDE_COLS, SCHEMA_COLS, MAPPED_COLS, METADATA_COLS } from "@/
 
 const PAGE_SIZE = 5000;
 
+/** Build WHERE clause for month range filtering */
+function buildMonthFilter(
+    fromYear: number, toYear: number,
+    fromMonth?: number, toMonth?: number
+): string {
+    const yearFilter = `nam_qt BETWEEN ${fromYear} AND ${toYear}`;
+    if (fromMonth == null || toMonth == null) return yearFilter;
+    // Use composite key (nam_qt * 100 + thang_qt) for cross-year range
+    const startVal = fromYear * 100 + fromMonth;
+    const endVal = toYear * 100 + toMonth;
+    return `${yearFilter} AND (nam_qt * 100 + thang_qt) BETWEEN ${startVal} AND ${endVal}`;
+}
+
 /**
  * GET /api/bq/overview/manage
  * Returns column list + available years
@@ -50,37 +63,42 @@ export async function POST(request: Request) {
         }
 
         if (action === "count") {
-            const { fromYear, toYear } = body as {
+            const { fromYear, toYear, fromMonth, toMonth } = body as {
                 action: string;
                 fromYear: number;
                 toYear: number;
+                fromMonth?: number;
+                toMonth?: number;
             };
-            // Use base table for count — no JOINs needed, much faster
+            const whereClause = buildMonthFilter(fromYear, toYear, fromMonth, toMonth);
             const query = `
                 SELECT COUNT(*) AS total
                 FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\`
-                WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
+                WHERE ${whereClause}
             `;
             const rows = await runQuery<{ total: number }>(query);
             return NextResponse.json({ total: rows[0]?.total ?? 0 });
         }
 
         if (action === "load") {
-            const { fromYear, toYear, page = 0 } = body as {
+            const { fromYear, toYear, page = 0, fromMonth, toMonth } = body as {
                 action: string;
                 fromYear: number;
                 toYear: number;
                 page?: number;
+                fromMonth?: number;
+                toMonth?: number;
             };
             const offset = page * PAGE_SIZE;
+            const whereClause = buildMonthFilter(fromYear, toYear, fromMonth, toMonth);
 
-            // Only fetch total on first page — client caches it for subsequent pages
+            // Only fetch total on first page
             let total = 0;
             if (page === 0) {
                 const countQuery = `
                     SELECT COUNT(*) AS total
                     FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_ID}\`
-                    WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
+                    WHERE ${whereClause}
                 `;
                 const countRows = await runQuery<{ total: number }>(countQuery);
                 total = countRows[0]?.total ?? 0;
@@ -90,7 +108,7 @@ export async function POST(request: Request) {
             const query = `
                 SELECT *
                 FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\`
-                WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
+                WHERE ${whereClause}
                 ORDER BY nam_qt DESC, thang_qt DESC, ma_cskcb, ma_bn, ngay_vao, ngay_ra
                 LIMIT ${PAGE_SIZE} OFFSET ${offset}
             `;
@@ -113,15 +131,17 @@ export async function POST(request: Request) {
         }
 
         if (action === "search") {
-            const { conditions, fromYear, toYear, limit = 10000 } = body as {
+            const { conditions, fromYear, toYear, limit = 10000, fromMonth, toMonth } = body as {
                 action: string;
                 conditions: SearchCondition[];
                 fromYear: number;
                 toYear: number;
                 limit?: number;
+                fromMonth?: number;
+                toMonth?: number;
             };
 
-            const whereParts = [`nam_qt BETWEEN ${fromYear} AND ${toYear}`];
+            const whereParts = [buildMonthFilter(fromYear, toYear, fromMonth, toMonth)];
             const activeConds = conditions.filter(
                 (c) => c.keyword?.trim()
             );
