@@ -91,7 +91,7 @@ export async function POST(request: Request) {
                 SELECT *
                 FROM \`${PROJECT_ID}.${DATASET_ID}.${VIEW_ID}\`
                 WHERE nam_qt BETWEEN ${fromYear} AND ${toYear}
-                ORDER BY nam_qt DESC, thang_qt DESC, ma_cskcb
+                ORDER BY nam_qt DESC, thang_qt DESC, ma_cskcb, ma_bn, ngay_vao, ngay_ra
                 LIMIT ${PAGE_SIZE} OFFSET ${offset}
             `;
             const rows = await runQuery(query);
