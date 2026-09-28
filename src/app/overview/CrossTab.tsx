@@ -15,6 +15,7 @@ interface CrossTabConfig {
 interface CrossTabProps {
     data: Record<string, unknown>[];
     columns: string[];
+    embedded?: boolean;
     columnLabels: Record<string, string>;
 }
 
@@ -55,18 +56,11 @@ function fmt(n: number): string {
     return n.toLocaleString("vi-VN", { maximumFractionDigits: 0 });
 }
 
-function fmtCompact(n: number): string {
-    if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "T";
-    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "Tr";
-    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
-    return fmt(n);
-}
-
 /* ── Component ── */
 
-export default function CrossTab({ data, columns, columnLabels }: CrossTabProps) {
+export default function CrossTab({ data, columns, columnLabels, embedded }: CrossTabProps) {
     const [isLoaded, setIsLoaded] = useState(false);
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(!!embedded);
     const [config, setConfig] = useState<CrossTabConfig | null>(null);
 
     // Available columns
@@ -452,10 +446,97 @@ export default function CrossTab({ data, columns, columnLabels }: CrossTabProps)
     };
 
     const label = (col: string) => columnLabels[col] || col;
-    const isSumMode = config?.mode === "sum";
-    const formatValue = isSumMode ? fmtCompact : fmt;
 
     if (!data || data.length === 0) return null;
+
+    // In embedded mode: auto-init config if not loaded yet
+    if (embedded && isLoaded && !config) {
+        const rowField = categoricalCols.includes("thang_qt") ? "thang_qt" : categoricalCols[0] || "";
+        const colField = categoricalCols.includes("ml2") && "ml2" !== rowField ? "ml2" : categoricalCols.find(c => c !== rowField) || "";
+        setConfig({ rowField, colField, valueField: "", mode: "count" });
+        setExpanded(true);
+    }
+
+    // Embedded mode: render toolbar + table only (no wrapper/header)
+    if (embedded) {
+        return (
+            <div>
+                {config && (
+                    <>
+                        <div style={S.toolbar}>
+                            <div style={S.fieldGroup}>
+                                <span style={S.fieldLabel}>Hàng:</span>
+                                <select style={S.fieldSelect} value={config.rowField} onChange={(e) => updateConfig({ rowField: e.target.value })}>
+                                    {categoricalCols.map((col) => (<option key={col} value={col}>{label(col)}</option>))}
+                                </select>
+                            </div>
+                            <span style={{ color: "#d1d5db", fontSize: "0.75rem" }}>×</span>
+                            <div style={S.fieldGroup}>
+                                <span style={S.fieldLabel}>Cột:</span>
+                                <select style={S.fieldSelect} value={config.colField} onChange={(e) => updateConfig({ colField: e.target.value })}>
+                                    {categoricalCols.map((col) => (<option key={col} value={col}>{label(col)}</option>))}
+                                </select>
+                            </div>
+                            <span style={{ color: "#e2e8f0", fontSize: "1rem" }}>|</span>
+                            <div style={S.fieldGroup}>
+                                <button style={S.modeBtn(config.mode === "count")} onClick={() => updateConfig({ mode: "count", valueField: "" })}>Đếm</button>
+                                <button style={S.modeBtn(config.mode === "sum")} onClick={() => { updateConfig({ mode: "sum", valueField: config.valueField || SUM_FIELDS[0] || "" }); }}>Tổng</button>
+                            </div>
+                            {config.mode === "sum" && (
+                                <div style={S.fieldGroup}>
+                                    <span style={S.fieldLabel}>Giá trị:</span>
+                                    <select style={S.fieldSelect} value={config.valueField} onChange={(e) => updateConfig({ valueField: e.target.value })}>
+                                        {SUM_FIELDS.filter((f) => availableCols.includes(f)).map((col) => (<option key={col} value={col}>{label(col)}</option>))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                        {crossTabData && crossTabData.rows.length > 0 ? (
+                            <>
+                                <div style={S.tableWrap}>
+                                    <table style={S.table}>
+                                        <thead>
+                                            <tr>
+                                                <th style={S.thCorner}>{label(config.rowField)} ↓ / {label(config.colField)} →</th>
+                                                {crossTabData.cols.map((col) => (<th key={col} style={S.th} title={col}>{col.length > 12 ? col.slice(0, 12) + "…" : col}</th>))}
+                                                <th style={S.thColTotal}>Tổng</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {crossTabData.rows.map((rowKey, rIdx) => (
+                                                <tr key={rowKey}>
+                                                    <td style={S.thRow} title={rowKey}>{rowKey.length > 18 ? rowKey.slice(0, 18) + "…" : rowKey}</td>
+                                                    {crossTabData.cols.map((colKey) => {
+                                                        const val = crossTabData.cells.get(`${rowKey}|||${colKey}`) || 0;
+                                                        const isEven = rIdx % 2 === 0;
+                                                        return <td key={colKey} style={val === 0 ? S.tdZero(isEven) : S.td(isEven)} title={val > 0 ? fmt(val) : ""}>{val === 0 ? "–" : fmt(val)}</td>;
+                                                    })}
+                                                    <td style={S.tdTotal(rIdx % 2 === 0)}>{fmt(crossTabData.rowTotals.get(rowKey) || 0)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style={S.trTotal}>
+                                                <td style={S.thTotal}>Tổng</td>
+                                                {crossTabData.cols.map((colKey) => (<td key={colKey} style={S.tdColTotal}>{fmt(crossTabData.colTotals.get(colKey) || 0)}</td>))}
+                                                <td style={S.tdGrand}>{fmt(crossTabData.grandTotal)}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <div style={S.footer}>
+                                    <span>{crossTabData.rows.length} hàng × {crossTabData.cols.length} cột</span>
+                                    <span>{config.mode === "count" ? "Số lượng" : `Tổng ${label(config.valueField)}`}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div style={S.emptyState}>Chọn trường cho hàng và cột để tạo bảng chéo</div>
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div style={S.wrapper}>
@@ -602,12 +683,12 @@ export default function CrossTab({ data, columns, columnLabels }: CrossTabProps)
                                                             style={val === 0 ? S.tdZero(isEven) : S.td(isEven)}
                                                             title={val > 0 ? fmt(val) : ""}
                                                         >
-                                                            {val === 0 ? "–" : formatValue(val)}
+                                                            {val === 0 ? "–" : fmt(val)}
                                                         </td>
                                                     );
                                                 })}
                                                 <td style={S.tdTotal(rIdx % 2 === 0)}>
-                                                    {formatValue(crossTabData.rowTotals.get(rowKey) || 0)}
+                                                    {fmt(crossTabData.rowTotals.get(rowKey) || 0)}
                                                 </td>
                                             </tr>
                                         ))}
@@ -617,11 +698,11 @@ export default function CrossTab({ data, columns, columnLabels }: CrossTabProps)
                                             <td style={S.thTotal}>Tổng</td>
                                             {crossTabData.cols.map((colKey) => (
                                                 <td key={colKey} style={S.tdColTotal}>
-                                                    {formatValue(crossTabData.colTotals.get(colKey) || 0)}
+                                                    {fmt(crossTabData.colTotals.get(colKey) || 0)}
                                                 </td>
                                             ))}
                                             <td style={S.tdGrand}>
-                                                {formatValue(crossTabData.grandTotal)}
+                                                {fmt(crossTabData.grandTotal)}
                                             </td>
                                         </tr>
                                     </tfoot>

@@ -16,6 +16,7 @@ interface DataInsightProps {
     totalRows: number;
     columns: string[];
     columnLabels: Record<string, string>;
+    embedded?: boolean;
 }
 
 /* ── Helpers ── */
@@ -56,7 +57,7 @@ function nextId(): string {
 
 /* ── Component ── */
 
-export default function DataInsight({ data, totalRows, columns, columnLabels }: DataInsightProps) {
+export default function DataInsight({ data, totalRows, columns, columnLabels, embedded }: DataInsightProps) {
     const [stats, setStats] = useState<InsightStat[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -278,8 +279,10 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
     const normalizedPct = totalRows > 0 ? Math.round((normalizedCount / totalRows) * 100) : 0;
 
     return (
-        <section style={S.container}>
-            {/* Total rows - always visible */}
+        <section style={{ ...S.container, ...(embedded ? { padding: "0.75rem" } : {}) }}>
+            {/* Summary cards - hidden in embedded mode */}
+            {!embedded && (
+            <>
             <div style={{ ...S.card, flex: "0 0 auto", minWidth: "140px", maxWidth: "160px" }}>
                 <div style={{ padding: "0.75rem 0.625rem", textAlign: "center" }}>
                     <div style={{ fontSize: "0.625rem", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
@@ -294,7 +297,6 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
                 </div>
             </div>
 
-            {/* Normalized count - always visible */}
             <div style={{ ...S.card, flex: "0 0 auto", minWidth: "140px", maxWidth: "160px", borderColor: "#a7f3d0" }}>
                 <div style={{ padding: "0.75rem 0.625rem", textAlign: "center" }}>
                     <div style={{ fontSize: "0.625rem", fontWeight: 700, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.25rem" }}>
@@ -308,6 +310,8 @@ export default function DataInsight({ data, totalRows, columns, columnLabels }: 
                     </div>
                 </div>
             </div>
+            </>
+            )}
 
             {/* Dynamic stat cards */}
             {stats.map((stat) => {

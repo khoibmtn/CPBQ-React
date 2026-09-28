@@ -18,8 +18,7 @@ async function safeJson(res: Response) {
     }
 }
 import { SCHEMA_COLS, MANAGE_EXCLUDE_COLS } from "@/lib/schema";
-import DataInsight from "./DataInsight";
-import CrossTab from "./CrossTab";
+import InsightPanel from "./InsightPanel";
 import SectionTitle from "@/components/ui/SectionTitle";
 import InfoBanner from "@/components/ui/InfoBanner";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -751,15 +750,9 @@ export default function TabManage() {
             {/* Dynamic Insights */}
             {data !== null && (
                 <>
-                    <DataInsight
+                    <InsightPanel
                         data={data}
                         totalRows={totalRows}
-                        columns={columns}
-                        columnLabels={COL_LABELS}
-                    />
-
-                    <CrossTab
-                        data={data}
                         columns={columns}
                         columnLabels={COL_LABELS}
                     />
