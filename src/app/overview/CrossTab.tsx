@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { X, Table2, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Table2, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
 
 /* ── Types ── */
 
@@ -58,10 +58,14 @@ function fmt(n: number): string {
 
 /* ── Component ── */
 
+type SortDir = "asc" | "desc" | null;
+
 export default function CrossTab({ data, columns, columnLabels, embedded }: CrossTabProps) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [expanded, setExpanded] = useState(!!embedded);
     const [config, setConfig] = useState<CrossTabConfig | null>(null);
+    const [sortCol, setSortCol] = useState<string | null>(null); // col key, "__total__", or "__label__"
+    const [sortDir, setSortDir] = useState<SortDir>(null);
 
     // Available columns
     const availableCols = useMemo(() => {
@@ -184,12 +188,12 @@ export default function CrossTab({ data, columns, columnLabels, embedded }: Cros
             colKeys.set(cKey, (colKeys.get(cKey) || 0) + value);
         }
 
-        // Sort rows and cols by total desc
-        const sortedRows = Array.from(rowKeys.entries()).sort((a, b) => b[1] - a[1]);
+        // Default sort: cols by total desc, rows unsorted (will be sorted by sortedRows)
         const sortedCols = Array.from(colKeys.entries()).sort((a, b) => b[1] - a[1]);
+        const defaultRows = Array.from(rowKeys.entries()).sort((a, b) => b[1] - a[1]);
 
         return {
-            rows: sortedRows.map(([k]) => k),
+            rows: defaultRows.map(([k]) => k),
             cols: sortedCols.map(([k]) => k),
             cells,
             rowTotals,
@@ -197,6 +201,50 @@ export default function CrossTab({ data, columns, columnLabels, embedded }: Cros
             grandTotal,
         };
     }, [config, data]);
+
+    // Apply user sort to rows
+    const sortedRows = useMemo(() => {
+        if (!crossTabData || !sortCol || !sortDir) return crossTabData?.rows || [];
+        const { rows, cells, rowTotals } = crossTabData;
+        return [...rows].sort((a, b) => {
+            let va: number | string, vb: number | string;
+            if (sortCol === "__total__") {
+                va = rowTotals.get(a) || 0;
+                vb = rowTotals.get(b) || 0;
+            } else if (sortCol === "__label__") {
+                va = a;
+                vb = b;
+            } else {
+                va = cells.get(`${a}|||${sortCol}`) || 0;
+                vb = cells.get(`${b}|||${sortCol}`) || 0;
+            }
+            if (sortCol === "__label__") {
+                const cmp = String(va).localeCompare(String(vb), "vi");
+                return sortDir === "asc" ? cmp : -cmp;
+            }
+            return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
+        });
+    }, [crossTabData, sortCol, sortDir]);
+
+    const handleSort = useCallback((col: string) => {
+        if (sortCol !== col) {
+            setSortCol(col);
+            setSortDir("asc");
+        } else if (sortDir === "asc") {
+            setSortDir("desc");
+        } else {
+            setSortCol(null);
+            setSortDir(null);
+        }
+    }, [sortCol, sortDir]);
+
+    const sortIcon = (col: string) => {
+        if (sortCol !== col) return <span style={{ opacity: 0.25, marginLeft: "0.25rem", display: "inline-flex", verticalAlign: "middle" }}><ArrowDown size={10} /></span>;
+        if (sortDir === "asc") return <span style={{ color: "#4f46e5", marginLeft: "0.25rem", display: "inline-flex", verticalAlign: "middle" }}><ArrowUp size={10} /></span>;
+        return <span style={{ color: "#4f46e5", marginLeft: "0.25rem", display: "inline-flex", verticalAlign: "middle" }}><ArrowDown size={10} /></span>;
+    };
+
+    const thSortable: React.CSSProperties = { cursor: "pointer", userSelect: "none" };
 
     /* ── Styles ── */
     const S = {
@@ -497,13 +545,13 @@ export default function CrossTab({ data, columns, columnLabels, embedded }: Cros
                                     <table style={S.table}>
                                         <thead>
                                             <tr>
-                                                <th style={S.thCorner}>{label(config.rowField)} ↓ / {label(config.colField)} →</th>
-                                                {crossTabData.cols.map((col) => (<th key={col} style={S.th} title={col}>{col.length > 12 ? col.slice(0, 12) + "…" : col}</th>))}
-                                                <th style={S.thColTotal}>Tổng</th>
+                                                <th style={{ ...S.thCorner, ...thSortable }} onClick={() => handleSort("__label__")}>{label(config.rowField)} / {label(config.colField)}{sortIcon("__label__")}</th>
+                                                {crossTabData.cols.map((col) => (<th key={col} style={{ ...S.th, ...thSortable }} title={col} onClick={() => handleSort(col)}>{col.length > 12 ? col.slice(0, 12) + "…" : col}{sortIcon(col)}</th>))}
+                                                <th style={{ ...S.thColTotal, ...thSortable }} onClick={() => handleSort("__total__")}>Tổng{sortIcon("__total__")}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {crossTabData.rows.map((rowKey, rIdx) => (
+                                            {sortedRows.map((rowKey, rIdx) => (
                                                 <tr key={rowKey}>
                                                     <td style={S.thRow} title={rowKey}>{rowKey.length > 18 ? rowKey.slice(0, 18) + "…" : rowKey}</td>
                                                     {crossTabData.cols.map((colKey) => {
@@ -657,19 +705,19 @@ export default function CrossTab({ data, columns, columnLabels, embedded }: Cros
                                 <table style={S.table}>
                                     <thead>
                                         <tr>
-                                            <th style={S.thCorner}>
-                                                {label(config.rowField)} ↓ / {label(config.colField)} →
+                                            <th style={{ ...S.thCorner, ...thSortable }} onClick={() => handleSort("__label__")}>
+                                                {label(config.rowField)} / {label(config.colField)}{sortIcon("__label__")}
                                             </th>
                                             {crossTabData.cols.map((col) => (
-                                                <th key={col} style={S.th} title={col}>
-                                                    {col.length > 12 ? col.slice(0, 12) + "…" : col}
+                                                <th key={col} style={{ ...S.th, ...thSortable }} title={col} onClick={() => handleSort(col)}>
+                                                    {col.length > 12 ? col.slice(0, 12) + "…" : col}{sortIcon(col)}
                                                 </th>
                                             ))}
-                                            <th style={S.thColTotal}>Tổng</th>
+                                            <th style={{ ...S.thColTotal, ...thSortable }} onClick={() => handleSort("__total__")}>Tổng{sortIcon("__total__")}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {crossTabData.rows.map((rowKey, rIdx) => (
+                                        {sortedRows.map((rowKey, rIdx) => (
                                             <tr key={rowKey}>
                                                 <td style={S.thRow} title={rowKey}>
                                                     {rowKey.length > 18 ? rowKey.slice(0, 18) + "…" : rowKey}
