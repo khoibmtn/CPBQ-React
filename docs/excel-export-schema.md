@@ -168,7 +168,8 @@ Lưu ý: Cùng `ma_khoa` có thể cho tên khác nhau tùy theo cơ sở KCB (`
 | `K282930` | Khoa LCK | LCK | Từ 01/01/2026 |
 | `K29` | Khoa Răng - Hàm - Mặt | RHM | 2000 → 31/12/2025 |
 | `K30` | Khoa Mắt | Mắt | 2000 → 31/12/2025 |
-| `K35` | Khoa Thận nhân tạo | Thận nhân tạo | Từ 2000 |
+| `K35` | Khoa Thận nhân tạo | Thận nhân tạo | 2000 → 31/08/2026 |
+| `K024849.D35` | Đơn nguyên Thận nhân tạo | Thận nhân tạo | Từ 01/09/2026 |
 | `K43` | Khoa KSNK | KSNK | Từ 2000 |
 | `K99` | Khoa AHF | AHF | Từ 2000 |
 | `PVMD` | Phân viện Minh Đức | PV Minh Đức | Từ 2000 |
@@ -262,7 +263,7 @@ STT | Mã BN      | Họ tên          | Ngày sinh  | Loại KCB | Nội/Ngoạ
 
 ## 6. Ghi chú kỹ thuật
 
-- **VIEW `v_thanh_toan`**: BigQuery VIEW thực hiện tất cả các LEFT JOIN ở trên tự động. Khi ứng dụng query `SELECT * FROM v_thanh_toan`, kết quả đã bao gồm cả cột gốc lẫn cột ánh xạ.
-- **Hiệu lực thời gian**: Các bảng `lookup_khoa` và `lookup_cskcb` có trường `valid_from` / `valid_to` để hỗ trợ tra cứu theo thời điểm (ví dụ: K19 đổi tên từ "Ngoại tổng hợp" → "Ngoại" từ 01/01/2026).
+- **VIEW `v_thanh_toan`**: BigQuery VIEW thực hiện tất cả các LEFT JOIN ở trên tự động. Khi ứng dụng query `SELECT * FROM v_thanh_toan`, kết quả đã bao gồm cả cột gốc lẫn cột ánh xạ. Đồng thời nhận diện các ca Thận nhân tạo ngoại trú linh hoạt theo `short_name = 'Thận nhân tạo'` (thay vì phụ thuộc vào mã kỹ thuật cố định `K35`).
+- **Hiệu lực thời gian**: Các bảng `lookup_khoa` và `lookup_cskcb` có trường `valid_from` / `valid_to` để hỗ trợ tra cứu theo thời điểm (ví dụ: K19 đổi tên từ "Ngoại tổng hợp" → "Ngoại" từ 01/01/2026, Thận nhân tạo chuyển mã từ K35 sang K024849.D35 từ 01/09/2026).
 - **Dung lượng**: Dataset ~55,000 dòng/năm. File Excel xuất ra ~5-10 MB tùy chế độ.
 - **Mã hóa**: UTF-8 với đầy đủ ký tự tiếng Việt có dấu.
